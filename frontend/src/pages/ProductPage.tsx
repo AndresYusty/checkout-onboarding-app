@@ -48,8 +48,8 @@ export default function ProductPage() {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-wompi-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-lg text-wompi-text font-medium">Cargando producto...</div>
+          <div className="w-16 h-16 border-4 border-gray-800 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-lg text-gray-700 font-medium">Cargando producto...</div>
         </div>
       </div>
     )
@@ -64,7 +64,7 @@ export default function ProductPage() {
         <p className="text-lg text-red-600 mb-4 font-semibold">{error || 'Producto no encontrado'}</p>
         <button
           onClick={() => navigate('/')}
-          className="bg-gradient-to-r from-wompi-primary to-wompi-primaryDark text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all font-semibold"
+          className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-gray-800 hover:shadow-lg transition-all font-semibold"
         >
           Volver al catálogo
         </button>
@@ -76,7 +76,7 @@ export default function ProductPage() {
     <div className="max-w-5xl mx-auto">
       <button
         onClick={() => navigate('/')}
-        className="mb-6 text-wompi-primary hover:text-wompi-primaryDark flex items-center space-x-2 font-medium transition-colors"
+        className="mb-6 text-gray-700 hover:text-gray-900 flex items-center space-x-2 font-medium transition-colors"
       >
         <span className="text-xl">←</span>
         <span>Volver al catálogo</span>
@@ -87,7 +87,7 @@ export default function ProductPage() {
           {/* Imagen */}
           <div className="relative">
             {currentProduct.imageUrl ? (
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-wompi-primary/10 to-wompi-primaryLight/10 p-4">
+              <div className="relative overflow-hidden rounded-xl bg-gray-100 p-4">
                 <img
                   src={currentProduct.imageUrl}
                   alt={currentProduct.name}
@@ -95,8 +95,8 @@ export default function ProductPage() {
                 />
               </div>
             ) : (
-              <div className="w-full h-96 bg-gradient-to-br from-wompi-primary/20 to-wompi-primaryLight/20 rounded-xl flex items-center justify-center">
-                <span className="text-wompi-primary text-6xl">📦</span>
+              <div className="w-full h-96 bg-gray-200 rounded-xl flex items-center justify-center">
+                <span className="text-gray-600 text-6xl">📦</span>
               </div>
             )}
           </div>
@@ -105,12 +105,12 @@ export default function ProductPage() {
           <div className="flex flex-col justify-between">
             <div>
               <div className="mb-4">
-                <span className="inline-block px-3 py-1 bg-wompi-primary/10 text-wompi-primaryDark text-xs font-semibold rounded-full mb-3">
+                <span className="inline-block px-3 py-1 bg-gray-100 text-gray-800 text-xs font-semibold rounded-full mb-3">
                   Disponible
                 </span>
               </div>
               
-              <h1 className="text-4xl font-bold text-wompi-secondary mb-4">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">
                 {currentProduct.name}
               </h1>
 
@@ -118,13 +118,13 @@ export default function ProductPage() {
                 <p className="text-gray-600 mb-6 text-lg leading-relaxed">{currentProduct.description}</p>
               )}
 
-              <div className="mb-6 p-6 bg-gradient-to-br from-wompi-primary/5 to-wompi-primaryLight/5 rounded-xl border border-wompi-primary/20">
-                <div className="text-5xl font-bold text-wompi-secondary mb-3">
+              <div className="mb-6 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="text-5xl font-bold text-gray-900 mb-3">
                   ${Number(currentProduct.price).toLocaleString('es-CO')}
                 </div>
                 <div className="flex items-center space-x-2 text-sm">
                   <span className="text-gray-600">Stock disponible:</span>
-                  <span className="font-bold text-wompi-primaryDark px-2 py-1 bg-white rounded-md">
+                  <span className="font-bold text-gray-800 px-2 py-1 bg-white rounded-md">
                     {currentProduct.stock} unidades
                   </span>
                 </div>
@@ -137,7 +137,7 @@ export default function ProductPage() {
                 disabled={currentProduct.stock === 0}
                 className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all transform hover:scale-105 shadow-lg ${
                   currentProduct.stock > 0
-                    ? 'bg-gradient-to-r from-wompi-primary to-wompi-primaryDark text-white hover:shadow-xl hover:from-wompi-primaryDark hover:to-wompi-primary'
+                    ? 'bg-gray-900 text-white hover:bg-gray-800 hover:shadow-xl'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
@@ -151,7 +151,7 @@ export default function ProductPage() {
                 )}
               </button>
               <p className="text-center text-xs text-gray-500 mt-3">
-                Pago seguro procesado por <span className="font-semibold text-wompi-primary">Wompi</span>
+                Pago seguro procesado por <span className="font-semibold">Wompi</span>
               </p>
             </div>
           </div>

@@ -194,25 +194,30 @@ export default function PaymentPage() {
     <div className="max-w-5xl mx-auto">
       <button
         onClick={() => navigate(`/product/${productId}`)}
-        className="mb-6 text-wompi-primary hover:text-wompi-primaryDark flex items-center space-x-2 font-medium transition-colors"
+        className="mb-6 text-gray-700 hover:text-gray-900 flex items-center space-x-2 font-medium transition-colors"
       >
         <span className="text-xl">←</span>
         <span>Volver al producto</span>
       </button>
 
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-wompi-secondary mb-2">Información de Entrega y Pago</h1>
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">Información de Entrega y Pago</h1>
         <p className="text-gray-600">Completa tus datos para procesar el pago de forma segura con Wompi</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Formulario */}
         <div className="lg:col-span-2">
-          <form className="bg-white rounded-lg shadow-md p-6 space-y-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Datos de Entrega</h2>
+          <form className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-6">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
+                <span className="text-white text-xl">👤</span>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Datos de Cliente</h2>
+            </div>
 
             <div>
-              <label className="block text-sm font-semibold text-wompi-text mb-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Email *
               </label>
               <input
@@ -220,25 +225,26 @@ export default function PaymentPage() {
                 required
                 value={customerData.email}
                 onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
                 placeholder="tu@email.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Nombre Completo
               </label>
               <input
                 type="text"
                 value={customerData.fullName}
                 onChange={(e) => setCustomerData({ ...customerData, fullName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                placeholder="Juan Pérez"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Teléfono *
               </label>
               <input
@@ -246,13 +252,22 @@ export default function PaymentPage() {
                 required
                 value={customerData.phone}
                 onChange={(e) => setCustomerData({ ...customerData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
                 placeholder="3001234567"
               />
             </div>
 
+            <div className="pt-6 border-t-2 border-gray-100 mt-6">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-xl">📦</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Datos de Entrega</h2>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Dirección *
               </label>
               <input
@@ -260,13 +275,14 @@ export default function PaymentPage() {
                 required
                 value={shippingData.address}
                 onChange={(e) => setShippingData({ ...shippingData, address: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                placeholder="Calle 123 # 45-67"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-wompi-text mb-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Ciudad *
                 </label>
                 <input
@@ -274,12 +290,12 @@ export default function PaymentPage() {
                   required
                   value={shippingData.city}
                   onChange={(e) => setShippingData({ ...shippingData, city: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
                   placeholder="Bogotá"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-wompi-text mb-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Código Postal *
                 </label>
                 <input
@@ -287,14 +303,14 @@ export default function PaymentPage() {
                   required
                   value={shippingData.postalCode}
                   onChange={(e) => setShippingData({ ...shippingData, postalCode: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
                   placeholder="110111"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-wompi-text mb-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Departamento/Región *
               </label>
               <input
@@ -302,115 +318,116 @@ export default function PaymentPage() {
                 required
                 value={shippingData.region}
                 onChange={(e) => setShippingData({ ...shippingData, region: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
                 placeholder="Cundinamarca"
               />
             </div>
 
             <div className="pt-6 border-t-2 border-gray-100 mt-6">
               <div className="flex items-center space-x-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-wompi-primary to-wompi-primaryDark rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
                   <span className="text-white text-xl">💳</span>
                 </div>
-                <h2 className="text-2xl font-bold text-wompi-secondary">Datos de Tarjeta</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Datos de Tarjeta</h2>
               </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Número de Tarjeta *
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={19}
-                value={cardData.number}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '')
-                  const formatted = value.match(/.{1,4}/g)?.join(' ') || value
-                  setCardData({ ...cardData, number: formatted })
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="4242 4242 4242 4242"
-              />
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Número de Tarjeta *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={19}
+                  value={cardData.number}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '')
+                    const formatted = value.match(/.{1,4}/g)?.join(' ') || value
+                    setCardData({ ...cardData, number: formatted })
+                  }}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-lg font-mono"
+                  placeholder="4242 4242 4242 4242"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mt-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Mes *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    value={cardData.expMonth}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 2)
+                      setCardData({ ...cardData, expMonth: value })
+                    }}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-center font-mono"
+                    placeholder="12"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Año *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    value={cardData.expYear}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 2)
+                      setCardData({ ...cardData, expYear: value })
+                    }}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-center font-mono"
+                    placeholder="29"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    CVV *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={4}
+                    value={cardData.cvc}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 4)
+                      setCardData({ ...cardData, cvc: value })
+                    }}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-center font-mono"
+                    placeholder="123"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mes *
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={2}
-                  value={cardData.expMonth}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 2)
-                    setCardData({ ...cardData, expMonth: value })
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="12"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Año *
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={2}
-                  value={cardData.expYear}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 2)
-                    setCardData({ ...cardData, expYear: value })
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="29"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  CVV *
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={4}
-                  value={cardData.cvc}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 4)
-                    setCardData({ ...cardData, cvc: value })
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="123"
-                />
-              </div>
-            </div>
-
-            <div className="p-4 bg-gradient-to-br from-wompi-primary/5 to-wompi-primaryLight/5 rounded-xl border border-wompi-primary/20">
-              <label className="block text-sm font-semibold text-wompi-text mb-3">
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
                 Cantidad
               </label>
               <div className="flex items-center space-x-4">
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-12 h-12 rounded-xl bg-white border-2 border-wompi-primary text-wompi-primary hover:bg-wompi-primary hover:text-white flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
+                  className="w-12 h-12 rounded-xl bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
                 >
                   −
                 </button>
-                <span className="text-2xl font-bold text-wompi-secondary w-16 text-center">{quantity}</span>
+                <span className="text-2xl font-bold text-gray-900 w-16 text-center">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.min(currentProduct.stock, quantity + 1))}
                   disabled={quantity >= currentProduct.stock}
-                  className="w-12 h-12 rounded-xl bg-white border-2 border-wompi-primary text-wompi-primary hover:bg-wompi-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-wompi-primary flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
+                  className="w-12 h-12 rounded-xl bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-800 flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
                 >
                   +
                 </button>
                 <span className="text-sm text-gray-600 ml-4">
-                  Stock disponible: <span className="font-bold text-wompi-primaryDark">{currentProduct.stock}</span>
+                  Stock disponible: <span className="font-bold text-gray-800">{currentProduct.stock}</span>
                 </span>
               </div>
             </div>
@@ -419,7 +436,7 @@ export default function PaymentPage() {
               type="button"
               onClick={handleCheckout}
               disabled={isTransactionLoading}
-              className="w-full bg-gradient-to-r from-wompi-primary to-wompi-primaryDark text-white py-4 px-6 rounded-xl font-bold text-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2"
+              className="w-full bg-gray-900 text-white py-4 px-6 rounded-xl font-bold text-lg hover:bg-gray-800 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2"
             >
               {isTransactionLoading ? (
                 <>
@@ -440,15 +457,20 @@ export default function PaymentPage() {
             <div className="flex items-center justify-center space-x-2 text-xs text-gray-500 pt-2">
               <span>🔒</span>
               <span>Pago seguro procesado por</span>
-              <span className="font-bold text-wompi-primary">Wompi</span>
+              <span className="font-bold">Wompi</span>
             </div>
           </form>
         </div>
 
         {/* Resumen */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Resumen</h2>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sticky top-4">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
+                <span className="text-white text-xl">📋</span>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Resumen</h2>
+            </div>
 
             <div className="space-y-2 mb-4">
               <div className="flex justify-between text-sm">
