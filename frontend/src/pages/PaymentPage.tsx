@@ -6,6 +6,19 @@ import { setTransaction, setLoading as setTransactionLoading } from '../store/sl
 import { productService } from '../services/api'
 import { checkoutService } from '../services/checkout.service'
 import { useModal } from '../context/ModalContext'
+import {
+  detectBrand,
+  isValidLuhn,
+  isValidExpiry,
+  isValidCvc,
+  isValidEmail,
+  isValidPhone,
+  formatCardNumber,
+  cleanCardNumber,
+  isCardValid,
+  type CardBrand,
+} from '../utils/cardValidation'
+import { CardLogo } from '../components/CardLogos'
 
 export default function PaymentPage() {
   const { productId } = useParams<{ productId: string }>()
@@ -33,6 +46,19 @@ export default function PaymentPage() {
     expMonth: '',
     expYear: '',
     cvc: '',
+  })
+  const [cardErrors, setCardErrors] = useState({
+    number: '',
+    expiry: '',
+    cvc: '',
+  })
+  const [deliveryErrors, setDeliveryErrors] = useState({
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    postalCode: '',
+    region: '',
   })
 
   useEffect(() => {
@@ -100,18 +126,102 @@ export default function PaymentPage() {
     }
   }
 
+  // Validación en tiempo real
+  const validateCardNumber = (number: string) => {
+    const cleaned = cleanCardNumber(number)
+    if (cleaned.length === 0) {
+      setCardErrors((prev) => ({ ...prev, number: '' }))
+      return
+    }
+    if (cleaned.length < 13 || cleaned.length > 19) {
+      setCardErrors((prev) => ({ ...prev, number: 'El número debe tener entre 13 y 19 dígitos' }))
+      return
+    }
+    if (!isValidLuhn(cleaned)) {
+      setCardErrors((prev) => ({ ...prev, number: 'Número de tarjeta inválido' }))
+      return
+    }
+    const brand = detectBrand(cleaned)
+    if (brand === 'UNKNOWN') {
+      setCardErrors((prev) => ({ ...prev, number: 'Solo se aceptan Visa y MasterCard' }))
+      return
+    }
+    setCardErrors((prev) => ({ ...prev, number: '' }))
+  }
+
+  const validateExpiry = (month: string, year: string) => {
+    if (!month || !year) {
+      setCardErrors((prev) => ({ ...prev, expiry: '' }))
+      return
+    }
+    if (!isValidExpiry(month, year)) {
+      setCardErrors((prev) => ({ ...prev, expiry: 'Fecha inválida o vencida' }))
+      return
+    }
+    setCardErrors((prev) => ({ ...prev, expiry: '' }))
+  }
+
+  const validateCvc = (cvc: string) => {
+    if (cvc.length === 0) {
+      setCardErrors((prev) => ({ ...prev, cvc: '' }))
+      return
+    }
+    if (!isValidCvc(cvc)) {
+      setCardErrors((prev) => ({ ...prev, cvc: 'CVC debe tener 3 o 4 dígitos' }))
+      return
+    }
+    setCardErrors((prev) => ({ ...prev, cvc: '' }))
+  }
+
+  const validateDelivery = () => {
+    const errors = {
+      email: '',
+      phone: '',
+      address: '',
+      city: '',
+      postalCode: '',
+      region: '',
+    }
+
+    if (!customerData.email) {
+      errors.email = 'El email es requerido'
+    } else if (!isValidEmail(customerData.email)) {
+      errors.email = 'Email inválido'
+    }
+
+    if (!customerData.phone) {
+      errors.phone = 'El teléfono es requerido'
+    } else if (!isValidPhone(customerData.phone)) {
+      errors.phone = 'Teléfono inválido (10-13 dígitos)'
+    }
+
+    if (!shippingData.address) errors.address = 'La dirección es requerida'
+    if (!shippingData.city) errors.city = 'La ciudad es requerida'
+    if (!shippingData.postalCode) errors.postalCode = 'El código postal es requerido'
+    if (!shippingData.region) errors.region = 'La región es requerida'
+
+    setDeliveryErrors(errors)
+    return Object.values(errors).every((err) => err === '')
+  }
+
   const handleCheckout = async () => {
     if (!currentProduct || !productId) return
 
-    // Validar formulario
-    if (!shippingData.address || !shippingData.city || !shippingData.postalCode || !shippingData.region || !customerData.phone || !customerData.email) {
-      showModal('Por favor completa todos los campos requeridos', 'warning', 'Campos incompletos')
+    // Validar datos de entrega
+    if (!validateDelivery()) {
+      showModal('Por favor corrige los errores en el formulario', 'warning', 'Campos inválidos')
       return
     }
 
-    // Validar tarjeta
-    if (!cardData.number || !cardData.expMonth || !cardData.expYear || !cardData.cvc) {
-      showModal('Por favor completa todos los datos de la tarjeta', 'warning', 'Campos incompletos')
+    // Validar tarjeta completa
+    const cardValidation = isCardValid(
+      cardData.number,
+      cardData.expMonth,
+      cardData.expYear,
+      cardData.cvc
+    )
+    if (!cardValidation.valid) {
+      showModal(cardValidation.errors.join('. '), 'warning', 'Tarjeta inválida')
       return
     }
 
@@ -224,10 +334,29 @@ export default function PaymentPage() {
                 type="email"
                 required
                 value={customerData.email}
-                onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                onChange={(e) => {
+                  setCustomerData({ ...customerData, email: e.target.value })
+                  if (e.target.value && !isValidEmail(e.target.value)) {
+                    setDeliveryErrors((prev) => ({ ...prev, email: 'Email inválido' }))
+                  } else {
+                    setDeliveryErrors((prev) => ({ ...prev, email: '' }))
+                  }
+                }}
+                onBlur={() => {
+                  if (customerData.email && !isValidEmail(customerData.email)) {
+                    setDeliveryErrors((prev) => ({ ...prev, email: 'Email inválido' }))
+                  }
+                }}
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                  deliveryErrors.email
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:border-gray-800'
+                }`}
                 placeholder="tu@email.com"
               />
+              {deliveryErrors.email && (
+                <p className="text-sm text-red-600 mt-1">{deliveryErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -251,10 +380,30 @@ export default function PaymentPage() {
                 type="tel"
                 required
                 value={customerData.phone}
-                onChange={(e) => setCustomerData({ ...customerData, phone: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '')
+                  setCustomerData({ ...customerData, phone: value })
+                  if (value && !isValidPhone(value)) {
+                    setDeliveryErrors((prev) => ({ ...prev, phone: 'Teléfono inválido (10-13 dígitos)' }))
+                  } else {
+                    setDeliveryErrors((prev) => ({ ...prev, phone: '' }))
+                  }
+                }}
+                onBlur={() => {
+                  if (customerData.phone && !isValidPhone(customerData.phone)) {
+                    setDeliveryErrors((prev) => ({ ...prev, phone: 'Teléfono inválido (10-13 dígitos)' }))
+                  }
+                }}
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                  deliveryErrors.phone
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:border-gray-800'
+                }`}
                 placeholder="3001234567"
               />
+              {deliveryErrors.phone && (
+                <p className="text-sm text-red-600 mt-1">{deliveryErrors.phone}</p>
+              )}
             </div>
 
             <div className="pt-6 border-t-2 border-gray-100 mt-6">
@@ -274,10 +423,27 @@ export default function PaymentPage() {
                 type="text"
                 required
                 value={shippingData.address}
-                onChange={(e) => setShippingData({ ...shippingData, address: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                onChange={(e) => {
+                  setShippingData({ ...shippingData, address: e.target.value })
+                  if (e.target.value) {
+                    setDeliveryErrors((prev) => ({ ...prev, address: '' }))
+                  }
+                }}
+                onBlur={() => {
+                  if (!shippingData.address) {
+                    setDeliveryErrors((prev) => ({ ...prev, address: 'La dirección es requerida' }))
+                  }
+                }}
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                  deliveryErrors.address
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:border-gray-800'
+                }`}
                 placeholder="Calle 123 # 45-67"
               />
+              {deliveryErrors.address && (
+                <p className="text-sm text-red-600 mt-1">{deliveryErrors.address}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -289,10 +455,27 @@ export default function PaymentPage() {
                   type="text"
                   required
                   value={shippingData.city}
-                  onChange={(e) => setShippingData({ ...shippingData, city: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                  onChange={(e) => {
+                    setShippingData({ ...shippingData, city: e.target.value })
+                    if (e.target.value) {
+                      setDeliveryErrors((prev) => ({ ...prev, city: '' }))
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!shippingData.city) {
+                      setDeliveryErrors((prev) => ({ ...prev, city: 'La ciudad es requerida' }))
+                    }
+                  }}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                    deliveryErrors.city
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-gray-200 focus:border-gray-800'
+                  }`}
                   placeholder="Bogotá"
                 />
+                {deliveryErrors.city && (
+                  <p className="text-sm text-red-600 mt-1">{deliveryErrors.city}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -302,10 +485,27 @@ export default function PaymentPage() {
                   type="text"
                   required
                   value={shippingData.postalCode}
-                  onChange={(e) => setShippingData({ ...shippingData, postalCode: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                  onChange={(e) => {
+                    setShippingData({ ...shippingData, postalCode: e.target.value })
+                    if (e.target.value) {
+                      setDeliveryErrors((prev) => ({ ...prev, postalCode: '' }))
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!shippingData.postalCode) {
+                      setDeliveryErrors((prev) => ({ ...prev, postalCode: 'El código postal es requerido' }))
+                    }
+                  }}
+                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                    deliveryErrors.postalCode
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-gray-200 focus:border-gray-800'
+                  }`}
                   placeholder="110111"
                 />
+                {deliveryErrors.postalCode && (
+                  <p className="text-sm text-red-600 mt-1">{deliveryErrors.postalCode}</p>
+                )}
               </div>
             </div>
 
@@ -317,10 +517,27 @@ export default function PaymentPage() {
                 type="text"
                 required
                 value={shippingData.region}
-                onChange={(e) => setShippingData({ ...shippingData, region: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                onChange={(e) => {
+                  setShippingData({ ...shippingData, region: e.target.value })
+                  if (e.target.value) {
+                    setDeliveryErrors((prev) => ({ ...prev, region: '' }))
+                  }
+                }}
+                onBlur={() => {
+                  if (!shippingData.region) {
+                    setDeliveryErrors((prev) => ({ ...prev, region: 'La región es requerida' }))
+                  }
+                }}
+                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                  deliveryErrors.region
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:border-gray-800'
+                }`}
                 placeholder="Cundinamarca"
               />
+              {deliveryErrors.region && (
+                <p className="text-sm text-red-600 mt-1">{deliveryErrors.region}</p>
+              )}
             </div>
 
             <div className="pt-6 border-t-2 border-gray-100 mt-6">
@@ -335,19 +552,38 @@ export default function PaymentPage() {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Número de Tarjeta *
                 </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={19}
-                  value={cardData.number}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '')
-                    const formatted = value.match(/.{1,4}/g)?.join(' ') || value
-                    setCardData({ ...cardData, number: formatted })
-                  }}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-lg font-mono"
-                  placeholder="4242 4242 4242 4242"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    maxLength={19}
+                    value={cardData.number}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '')
+                      const formatted = formatCardNumber(value)
+                      setCardData({ ...cardData, number: formatted })
+                      validateCardNumber(formatted)
+                    }}
+                    onBlur={() => validateCardNumber(cardData.number)}
+                    className={`w-full px-4 py-3 pr-16 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-lg font-mono ${
+                      cardErrors.number
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-200 focus:border-gray-800'
+                    }`}
+                    placeholder="4242 4242 4242 4242"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+                    <CardLogo brand={detectBrand(cardData.number)} />
+                  </div>
+                </div>
+                {cardErrors.number && (
+                  <p className="text-sm text-red-600 mt-1">{cardErrors.number}</p>
+                )}
+                {!cardErrors.number &&
+                  cardData.number.length > 0 &&
+                  isValidLuhn(cleanCardNumber(cardData.number)) && (
+                    <p className="text-sm text-green-600 mt-1">✓ Tarjeta válida</p>
+                  )}
               </div>
 
               <div className="grid grid-cols-3 gap-4 mt-4">
@@ -363,8 +599,14 @@ export default function PaymentPage() {
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, '').slice(0, 2)
                       setCardData({ ...cardData, expMonth: value })
+                      validateExpiry(value, cardData.expYear)
                     }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-center font-mono"
+                    onBlur={() => validateExpiry(cardData.expMonth, cardData.expYear)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-center font-mono ${
+                      cardErrors.expiry
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-200 focus:border-gray-800'
+                    }`}
                     placeholder="12"
                   />
                 </div>
@@ -380,8 +622,14 @@ export default function PaymentPage() {
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, '').slice(0, 2)
                       setCardData({ ...cardData, expYear: value })
+                      validateExpiry(cardData.expMonth, value)
                     }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-center font-mono"
+                    onBlur={() => validateExpiry(cardData.expMonth, cardData.expYear)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-center font-mono ${
+                      cardErrors.expiry
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-200 focus:border-gray-800'
+                    }`}
                     placeholder="29"
                   />
                 </div>
@@ -397,12 +645,22 @@ export default function PaymentPage() {
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, '').slice(0, 4)
                       setCardData({ ...cardData, cvc: value })
+                      validateCvc(value)
                     }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all text-center font-mono"
+                    onBlur={() => validateCvc(cardData.cvc)}
+                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-center font-mono ${
+                      cardErrors.cvc
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-200 focus:border-gray-800'
+                    }`}
                     placeholder="123"
                   />
                 </div>
               </div>
+              {cardErrors.expiry && (
+                <p className="text-sm text-red-600 mt-1">{cardErrors.expiry}</p>
+              )}
+              {cardErrors.cvc && <p className="text-sm text-red-600 mt-1">{cardErrors.cvc}</p>}
             </div>
 
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">

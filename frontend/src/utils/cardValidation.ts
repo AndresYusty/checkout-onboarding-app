@@ -1,95 +1,114 @@
-export interface CardBrand {
-  type: 'visa' | 'mastercard' | 'amex' | 'discover' | 'unknown';
-  name: string;
-  logo: string;
+export type CardBrand = 'VISA' | 'MASTERCARD' | 'UNKNOWN';
+
+export function cleanCardNumber(value: string): string {
+  return value.replace(/\D/g, '');
 }
 
-export const detectCardBrand = (cardNumber: string): CardBrand => {
-  const cleaned = cardNumber.replace(/\s/g, '');
-  
-  // VISA: Empieza con 4
-  if (/^4/.test(cleaned)) {
-    return { type: 'visa', name: 'VISA', logo: '💳' };
-  }
-  // Mastercard: Empieza con 51-55
-  if (/^5[1-5]/.test(cleaned)) {
-    return { type: 'mastercard', name: 'Mastercard', logo: '💳' };
-  }
-  // American Express: Empieza con 34 o 37
-  if (/^3[47]/.test(cleaned)) {
-    return { type: 'amex', name: 'American Express', logo: '💳' };
-  }
-  // Discover: Empieza con 6011 o 65
-  if (/^6(?:011|5)/.test(cleaned)) {
-    return { type: 'discover', name: 'Discover', logo: '💳' };
-  }
-  
-  return { type: 'unknown', name: 'Tarjeta', logo: '💳' };
-};
-
-export const validateCardNumber = (cardNumber: string): boolean => {
-  const cleaned = cardNumber.replace(/\s/g, '');
-  
-  // Debe tener entre 13 y 19 dígitos
-  if (!/^\d{13,19}$/.test(cleaned)) {
-    return false;
-  }
-  
-  // Algoritmo de Luhn
+// Algoritmo de Luhn
+export function isValidLuhn(cardNumber: string): boolean {
+  const cleaned = cleanCardNumber(cardNumber);
   let sum = 0;
-  let isEven = false;
-  
+  let shouldDouble = false;
+
   for (let i = cleaned.length - 1; i >= 0; i--) {
-    let digit = parseInt(cleaned[i]);
-    
-    if (isEven) {
+    let digit = parseInt(cleaned[i], 10);
+    if (Number.isNaN(digit)) return false;
+
+    if (shouldDouble) {
       digit *= 2;
-      if (digit > 9) {
-        digit -= 9;
-      }
+      if (digit > 9) digit -= 9;
     }
-    
     sum += digit;
-    isEven = !isEven;
+    shouldDouble = !shouldDouble;
   }
-  
   return sum % 10 === 0;
-};
+}
 
-export const validateCVV = (cvv: string, cardBrand: CardBrand): boolean => {
-  const cleaned = cvv.replace(/\s/g, '');
-  
-  if (cardBrand.type === 'amex') {
-    return /^\d{4}$/.test(cleaned);
-  }
-  
-  return /^\d{3}$/.test(cleaned);
-};
+export function detectBrand(cardNumberRaw: string): CardBrand {
+  const n = cleanCardNumber(cardNumberRaw);
 
-export const validateExpiryDate = (month: string, year: string): boolean => {
-  const monthNum = parseInt(month);
-  const yearNum = parseInt(year);
-  const currentYear = new Date().getFullYear() % 100;
-  const currentMonth = new Date().getMonth() + 1;
-  
-  if (monthNum < 1 || monthNum > 12) {
-    return false;
-  }
-  
-  if (yearNum < currentYear) {
-    return false;
-  }
-  
-  if (yearNum === currentYear && monthNum < currentMonth) {
-    return false;
-  }
-  
-  return true;
-};
+  // VISA: 4 + (13/16/19)
+  if (/^4\d{12}(\d{3})?(\d{3})?$/.test(n)) return 'VISA';
 
-export const formatCardNumber = (value: string): string => {
-  const cleaned = value.replace(/\s/g, '');
+  // MasterCard: 51-55 + 16
+  if (/^5[1-5]\d{14}$/.test(n)) return 'MASTERCARD';
+
+  // MasterCard: 2221-2720 + 16
+  const first4 = parseInt(n.slice(0, 4), 10);
+  if (n.length === 16 && first4 >= 2221 && first4 <= 2720) return 'MASTERCARD';
+
+  return 'UNKNOWN';
+}
+
+export function isValidExpiry(mm: string, yy: string): boolean {
+  const month = parseInt(mm, 10);
+  let year = parseInt(yy, 10);
+  if (Number.isNaN(month) || Number.isNaN(year)) return false;
+  if (month < 1 || month > 12) return false;
+
+  // Asumir YY (ej 29 => 2029)
+  if (year < 100) year += 2000;
+
+  const now = new Date();
+  const exp = new Date(year, month); // Fin del mes
+  return exp > now;
+}
+
+export function isValidCvc(cvc: string): boolean {
+  return /^\d{3,4}$/.test(cvc.trim());
+}
+
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+export function isValidPhone(phone: string): boolean {
+  const p = phone.replace(/\D/g, '');
+  return p.length >= 10 && p.length <= 13;
+}
+
+export function formatCardNumber(value: string): string {
+  const cleaned = cleanCardNumber(value);
   const groups = cleaned.match(/.{1,4}/g);
   return groups ? groups.join(' ') : cleaned;
-};
+}
+
+// Validación completa de tarjeta
+export function isCardValid(
+  cardNumber: string,
+  expMonth: string,
+  expYear: string,
+  cvc: string
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  const cleaned = cleanCardNumber(cardNumber);
+
+  // Validar número
+  if (cleaned.length < 13 || cleaned.length > 19) {
+    errors.push('El número de tarjeta debe tener entre 13 y 19 dígitos');
+  } else if (!isValidLuhn(cleaned)) {
+    errors.push('El número de tarjeta no es válido (algoritmo de Luhn)');
+  }
+
+  // Validar marca
+  const brand = detectBrand(cardNumber);
+  if (brand === 'UNKNOWN' && cleaned.length > 0) {
+    errors.push('Marca de tarjeta no reconocida (solo Visa y MasterCard)');
+  }
+
+  // Validar fecha
+  if (!isValidExpiry(expMonth, expYear)) {
+    errors.push('La fecha de expiración no es válida o está vencida');
+  }
+
+  // Validar CVC
+  if (!isValidCvc(cvc)) {
+    errors.push('El CVC debe tener 3 o 4 dígitos');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
 
