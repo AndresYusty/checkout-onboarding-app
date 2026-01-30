@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { useCart } from '../context/CartContext'
-import { Link } from 'react-router-dom'
+import { useModal } from '../context/ModalContext'
+import { Link, useNavigate } from 'react-router-dom'
 
 export default function CheckoutPage() {
   const { items, getTotal, clearCart } = useCart()
+  const { showModal } = useModal()
+  const navigate = useNavigate()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -24,9 +27,16 @@ export default function CheckoutPage() {
     // TODO: Integrar con el backend para crear la orden
     // Por ahora solo simulamos el proceso
     setTimeout(() => {
-      alert('✅ Orden creada exitosamente (simulación)')
+      showModal(
+        'Tu orden ha sido procesada exitosamente. Recibirás un correo de confirmación pronto.',
+        'success',
+        '¡Orden creada!'
+      )
       clearCart()
       setLoading(false)
+      setTimeout(() => {
+        navigate('/')
+      }, 2000)
     }, 2000)
   }
 

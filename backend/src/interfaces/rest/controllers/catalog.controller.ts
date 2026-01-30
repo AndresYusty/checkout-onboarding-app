@@ -8,22 +8,19 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
-  Inject,
 } from '@nestjs/common';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
 import { CreateProductUseCase } from '../../../application/use-cases/catalog/create-product.use-case';
 import { GetProductsUseCase } from '../../../application/use-cases/catalog/get-products.use-case';
-import type { IProductRepository } from '../../../domain/catalog/repositories/product.repository';
-import { PRODUCT_REPOSITORY } from '../../../catalog.module';
+import { ProductRepository } from '../../../infrastructure/repositories/product.repository.impl';
 
 @Controller('catalog/products')
 export class CatalogController {
   constructor(
     private readonly createProductUseCase: CreateProductUseCase,
     private readonly getProductsUseCase: GetProductsUseCase,
-    @Inject(PRODUCT_REPOSITORY)
-    private readonly productRepository: IProductRepository,
+    private readonly productRepository: ProductRepository,
   ) {}
 
   @Post()

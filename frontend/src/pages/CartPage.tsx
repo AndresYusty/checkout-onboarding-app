@@ -1,8 +1,14 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
+import { useModal } from '../context/ModalContext'
+import ConfirmModal from '../components/ConfirmModal'
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, getTotal, clearCart } = useCart()
+  const { showModal } = useModal()
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [itemToRemove, setItemToRemove] = useState<string | null>(null)
 
   if (items.length === 0) {
     return (
@@ -24,12 +30,26 @@ export default function CartPage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Carrito de Compras</h1>
         <button
-          onClick={clearCart}
+          onClick={() => setShowClearConfirm(true)}
           className="text-red-600 hover:text-red-700 font-medium"
         >
           Limpiar Carrito
         </button>
       </div>
+
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={() => {
+          clearCart()
+          showModal('Carrito limpiado exitosamente', 'info', 'Carrito vacío')
+        }}
+        title="Limpiar carrito"
+        message="¿Estás seguro de que deseas eliminar todos los productos del carrito? Esta acción no se puede deshacer."
+        confirmText="Sí, limpiar"
+        cancelText="Cancelar"
+        type="warning"
+      />
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="space-y-4">
@@ -78,8 +98,9 @@ export default function CartPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => removeItem(item.product.id)}
-                  className="text-red-600 hover:text-red-700 ml-4"
+                  onClick={() => setItemToRemove(item.product.id)}
+                  className="text-red-600 hover:text-red-700 ml-4 transition-transform hover:scale-110"
+                  title="Eliminar producto"
                 >
                   🗑️
                 </button>
@@ -103,6 +124,28 @@ export default function CartPage() {
           Proceder al Checkout
         </Link>
       </div>
+
+      {itemToRemove && (
+        <ConfirmModal
+          isOpen={!!itemToRemove}
+          onClose={() => setItemToRemove(null)}
+          onConfirm={() => {
+            const product = items.find(item => item.product.id === itemToRemove)?.product
+            removeItem(itemToRemove)
+            showModal(
+              `${product?.name || 'Producto'} eliminado del carrito`,
+              'info',
+              'Producto eliminado'
+            )
+            setItemToRemove(null)
+          }}
+          title="Eliminar producto"
+          message={`¿Estás seguro de que deseas eliminar "${items.find(item => item.product.id === itemToRemove)?.product.name}" del carrito?`}
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          type="warning"
+        />
+      )}
     </div>
   )
 }

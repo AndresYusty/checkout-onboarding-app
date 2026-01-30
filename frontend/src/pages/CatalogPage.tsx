@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Product, productService } from '../services/api'
 import { useCart } from '../context/CartContext'
+import { useModal } from '../context/ModalContext'
 
 export default function CatalogPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { addItem } = useCart()
+  const { showModal } = useModal()
 
   useEffect(() => {
     loadProducts()
@@ -28,9 +30,17 @@ export default function CatalogPage() {
   const handleAddToCart = (product: Product) => {
     if (product.stock > 0) {
       addItem(product, 1)
-      alert(`✅ ${product.name} agregado al carrito`)
+      showModal(
+        `${product.name} agregado al carrito`,
+        'success',
+        'Producto agregado'
+      )
     } else {
-      alert('❌ Producto sin stock')
+      showModal(
+        'Este producto no tiene stock disponible',
+        'error',
+        'Sin stock'
+      )
     }
   }
 

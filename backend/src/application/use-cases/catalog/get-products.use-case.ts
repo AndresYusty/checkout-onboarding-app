@@ -1,13 +1,11 @@
-import { Injectable, Inject } from '@nestjs/common';
-import type { IProductRepository } from '../../../domain/catalog/repositories/product.repository';
+import { Injectable } from '@nestjs/common';
 import { Product } from '@prisma/client';
-import { PRODUCT_REPOSITORY } from '../../../catalog.module';
+import { ProductRepository } from '../../../infrastructure/repositories/product.repository.impl';
 
 @Injectable()
 export class GetProductsUseCase {
   constructor(
-    @Inject(PRODUCT_REPOSITORY)
-    private readonly productRepository: IProductRepository,
+    private readonly productRepository: ProductRepository,
   ) {}
 
   async execute(): Promise<Product[]> {
