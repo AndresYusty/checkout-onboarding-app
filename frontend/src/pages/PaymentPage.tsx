@@ -622,7 +622,7 @@ export default function PaymentPage() {
                         ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
                         : 'border-gray-300'
                     }`}
-                    placeholder="4242 4242 4242 4242"
+                    placeholder="5555 5555 5555 4444"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
                     <CardLogo brand={detectBrand(cardData.number)} />
