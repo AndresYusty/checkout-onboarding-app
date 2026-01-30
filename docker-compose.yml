@@ -39,22 +39,20 @@ services:
     restart: unless-stopped
 
   # Frontend React
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://backend:3000}
-    container_name: checkout-frontend
-    env_file:
-      - ./frontend/.env
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend
-    networks:
-      - checkout-net
-    restart: unless-stopped
+frontend:
+  build:
+    context: ./frontend
+    dockerfile: Dockerfile
+  container_name: checkout-frontend
+  env_file:
+    - ./frontend/.env
+  ports:
+    - "5173:80"
+  depends_on:
+    - backend
+  networks:
+    - checkout-net
+  restart: unless-stopped
 
 networks:
   checkout-net:
