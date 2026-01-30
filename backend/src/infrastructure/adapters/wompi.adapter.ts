@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
-import { IWompiPort, WompiTransactionData, WompiTransactionResponse } from '../../application/ports/wompi.port';
+import * as crypto from 'crypto';
+import { IWompiPort, WompiTransactionData, WompiTransactionResponse, WompiCardData, WompiTokenResponse } from '../../application/ports/wompi.port';
 
 @Injectable()
 export class WompiAdapter implements IWompiPort {
@@ -23,12 +24,84 @@ export class WompiAdapter implements IWompiPort {
     });
   }
 
+  async getAcceptanceToken(): Promise<string> {
+    try {
+      const response = await this.axiosInstance.get(`/merchants/${this.publicKey}`, {
+        headers: {
+          Authorization: `Bearer ${this.publicKey}`,
+        },
+      });
+
+      return response.data.data.presigned_acceptance.acceptance_token;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.response?.data?.message || 
+                          error.message;
+      throw new Error(`Wompi Acceptance Token Error: ${errorMessage}`);
+    }
+  }
+
+  private generateWompiSignature(
+    reference: string,
+    amountInCents: number,
+    currency: string,
+    integrityKey: string
+  ): string {
+    // Formato: reference + amount_in_cents + currency + integrity_key
+    const raw = `${reference}${amountInCents}${currency}${integrityKey}`;
+    return crypto
+      .createHash('sha256')
+      .update(raw)
+      .digest('hex');
+  }
+
+  async tokenizeCard(cardData: WompiCardData): Promise<WompiTokenResponse> {
+    try {
+      const response = await this.axiosInstance.post(
+        '/tokens/cards',
+        {
+          number: cardData.number,
+          exp_month: cardData.expMonth,
+          exp_year: cardData.expYear,
+          cvc: cardData.cvc,
+          card_holder: cardData.cardHolder,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.publicKey}`,
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.response?.data?.message || 
+                          error.message;
+      throw new Error(`Wompi Tokenization Error: ${errorMessage}`);
+    }
+  }
+
   async createTransaction(data: WompiTransactionData): Promise<WompiTransactionResponse> {
     try {
-      // En Wompi, el token se crea desde el frontend usando la public key
-      // El token ya viene del frontend, solo lo usamos directamente
+      // Obtener acceptance_token (OBLIGATORIO para Wompi)
+      const acceptanceToken = await this.getAcceptanceToken();
+
+      // Asegurar que amount_in_cents sea un entero (sin decimales)
+      const amountInCents = Math.round(data.amountInCents);
+
+      // Generar firma de integridad (OBLIGATORIO para Wompi)
+      const integrityKey = this.configService.get<string>('WOMPI_INTEGRITY_SECRET') || '';
+      const signature = this.generateWompiSignature(
+        data.reference,
+        amountInCents,
+        data.currency,
+        integrityKey
+      );
+
+      // Payload mínimo para Wompi (shipping_address NO es obligatorio y causa 422 en sandbox)
       const transactionData: any = {
-        amount_in_cents: data.amountInCents,
+        amount_in_cents: amountInCents,
         currency: data.currency,
         customer_email: data.customerEmail,
         payment_method: {
@@ -37,18 +110,15 @@ export class WompiAdapter implements IWompiPort {
           token: data.paymentMethod.token,
         },
         reference: data.reference,
+        acceptance_token: acceptanceToken, // OBLIGATORIO
+        signature: signature, // OBLIGATORIO - Firma de integridad SHA256
       };
 
-      // Agregar dirección de envío si existe
-      if (data.shippingAddress) {
-        transactionData.shipping_address = {
-          address_line_1: data.shippingAddress.addressLine1,
-          city: data.shippingAddress.city,
-          phone_number: data.shippingAddress.phoneNumber,
-          region: data.shippingAddress.region,
-          country: data.shippingAddress.country,
-        };
-      }
+      // NOTA: shipping_address NO se envía a Wompi
+      // La dirección se guarda en el backend pero no es requerida por Wompi para autorización
+      // Enviarla causa errores 422 en sandbox por validaciones estrictas
+
+      console.log('WOMPI PAYLOAD:', JSON.stringify(transactionData, null, 2));
 
       const response = await this.axiosInstance.post(
         '/transactions',
@@ -62,6 +132,21 @@ export class WompiAdapter implements IWompiPort {
 
       return response.data;
     } catch (error: any) {
+      // Log detallado del error para debugging
+      console.error('WOMPI ERROR:', JSON.stringify(error.response?.data, null, 2));
+      console.error('Wompi API Error Details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+      });
+      
+      // Extraer mensajes de validación específicos si existen
+      const validationMessages = error.response?.data?.messages;
+      if (validationMessages) {
+        console.error('Validation Errors:', JSON.stringify(validationMessages, null, 2));
+      }
+      
       const errorMessage = error.response?.data?.error?.message || 
                           error.response?.data?.message || 
                           error.message;

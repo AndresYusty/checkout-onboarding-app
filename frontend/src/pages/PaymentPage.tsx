@@ -5,7 +5,6 @@ import { setCurrentProduct, setLoading } from '../store/slices/productSlice'
 import { setTransaction, setLoading as setTransactionLoading } from '../store/slices/transactionSlice'
 import { productService } from '../services/api'
 import { checkoutService } from '../services/checkout.service'
-import WompiWidget from '../components/WompiWidget'
 import { useModal } from '../context/ModalContext'
 
 export default function PaymentPage() {
@@ -16,27 +15,28 @@ export default function PaymentPage() {
   const { isLoading: isTransactionLoading } = useAppSelector((state) => state.transaction)
   const { showModal } = useModal()
 
-  const [checkoutSession, setCheckoutSession] = useState<any>(null)
   const [quantity, setQuantity] = useState(1)
   const [shippingData, setShippingData] = useState({
-    addressLine1: '',
+    address: '',
     city: '',
     region: '',
     postalCode: '',
     country: 'CO',
-    phoneNumber: '',
-    name: '',
   })
   const [customerData, setCustomerData] = useState({
     email: '',
     fullName: '',
-    phoneNumber: '',
-    phoneNumberPrefix: '+57',
+    phone: '',
+  })
+  const [cardData, setCardData] = useState({
+    number: '',
+    expMonth: '',
+    expYear: '',
+    cvc: '',
   })
 
   useEffect(() => {
     if (productId) {
-      // Intentar cargar desde localStorage primero
       const stored = localStorage.getItem('currentProduct')
       if (stored) {
         try {
@@ -58,13 +58,16 @@ export default function PaymentPage() {
       try {
         const data = JSON.parse(storedShipping)
         setShippingData({
-          addressLine1: data.street || data.addressLine1 || '',
+          address: data.address || data.street || data.addressLine1 || '',
           city: data.city || '',
-          region: data.state || data.region || '',
+          region: data.region || data.state || '',
           postalCode: data.postalCode || '',
           country: data.country || 'CO',
-          phoneNumber: data.phone || data.phoneNumber || '',
-          name: data.name || '',
+        })
+        setCustomerData({
+          email: data.email || '',
+          fullName: data.fullName || '',
+          phone: data.phone || data.phoneNumber || '',
         })
       } catch {
         // Ignorar errores
@@ -72,12 +75,15 @@ export default function PaymentPage() {
     }
   }, [productId])
   
-  // Guardar datos de envío en localStorage
+  // Guardar datos en localStorage
   useEffect(() => {
-    if (shippingData.addressLine1 || shippingData.email) {
-      localStorage.setItem('shippingData', JSON.stringify(shippingData))
+    if (shippingData.address || customerData.email) {
+      localStorage.setItem('shippingData', JSON.stringify({
+        ...shippingData,
+        ...customerData,
+      }))
     }
-  }, [shippingData])
+  }, [shippingData, customerData])
 
   const loadProduct = async () => {
     if (!productId) return
@@ -94,12 +100,18 @@ export default function PaymentPage() {
     }
   }
 
-  const handleCreateSession = async () => {
+  const handleCheckout = async () => {
     if (!currentProduct || !productId) return
 
     // Validar formulario
-    if (!shippingData.addressLine1 || !shippingData.city || !shippingData.postalCode || !shippingData.region || !customerData.phoneNumber || !customerData.email) {
+    if (!shippingData.address || !shippingData.city || !shippingData.postalCode || !shippingData.region || !customerData.phone || !customerData.email) {
       showModal('Por favor completa todos los campos requeridos', 'warning', 'Campos incompletos')
+      return
+    }
+
+    // Validar tarjeta
+    if (!cardData.number || !cardData.expMonth || !cardData.expYear || !cardData.cvc) {
+      showModal('Por favor completa todos los datos de la tarjeta', 'warning', 'Campos incompletos')
       return
     }
 
@@ -111,58 +123,57 @@ export default function PaymentPage() {
     dispatch(setTransactionLoading(true))
 
     try {
-      const result = await checkoutService.createCheckoutSession({
+      const result = await checkoutService.processCheckout({
         productId,
-        quantity,
-        customerEmail: customerData.email,
-        shippingAddress: {
-          addressLine1: shippingData.addressLine1,
-          city: shippingData.city,
-          region: shippingData.region,
-          country: shippingData.country,
-          phoneNumber: customerData.phoneNumber,
-          name: shippingData.name || customerData.fullName,
-          postalCode: shippingData.postalCode,
-        },
-        customerData: {
+        quantity: quantity, // Enviar la cantidad real
+        customer: {
+          fullName: customerData.fullName || 'Cliente',
           email: customerData.email,
-          fullName: customerData.fullName,
-          phoneNumber: customerData.phoneNumber,
-          phoneNumberPrefix: customerData.phoneNumberPrefix,
+          phone: customerData.phone,
         },
-        redirectUrl: `${window.location.origin}/transaction/result`,
+        delivery: {
+          address: shippingData.address,
+          city: shippingData.city,
+          country: shippingData.country,
+          postalCode: shippingData.postalCode,
+          region: shippingData.region,
+        },
+        card: {
+          number: cardData.number.replace(/\s/g, ''),
+          expMonth: cardData.expMonth,
+          expYear: cardData.expYear,
+          cvc: cardData.cvc,
+        },
       })
 
-      if (result.success && result.data) {
-        setCheckoutSession(result.data)
+      if (result.success) {
+        dispatch(setTransaction({
+          orderId: result.orderId || '',
+          paymentId: result.transactionId || '',
+          status: result.status === 'APPROVED' ? 'approved' : result.status === 'DECLINED' ? 'rejected' : 'pending',
+          productId,
+          quantity,
+        }))
+        
+        // Limpiar localStorage del producto para forzar recarga desde API
+        localStorage.removeItem('currentProduct')
+        
+        showModal(
+          result.message || 'Pago procesado correctamente',
+          result.status === 'APPROVED' ? 'success' : 'warning',
+          result.status === 'APPROVED' ? 'Pago exitoso' : 'Pago pendiente'
+        )
+        setTimeout(() => {
+          navigate(`/product/${productId}`)
+        }, 2000)
       } else {
-        showModal(result.error || 'Error al crear la sesión de pago', 'error', 'Error')
+        showModal(result.error || 'Error al procesar el pago', 'error', 'Error')
       }
     } catch (error: any) {
-      showModal(error.message || 'Error al crear la sesión de pago', 'error', 'Error')
+      showModal(error.message || 'Error al procesar el pago', 'error', 'Error')
     } finally {
       dispatch(setTransactionLoading(false))
     }
-  }
-
-  const handleWompiSuccess = (result: any) => {
-    const transaction = result.transaction
-    if (transaction) {
-      dispatch(setTransaction({
-        orderId: transaction.reference,
-        paymentId: transaction.id,
-        status: transaction.status === 'APPROVED' ? 'approved' : 'rejected',
-        productId,
-        quantity,
-      }))
-
-      navigate(`/transaction/result/${transaction.reference}`)
-    }
-  }
-
-  const handleWompiError = (error: any) => {
-    console.error('Wompi error:', error)
-    showModal(error.message || 'Error al procesar el pago', 'error', 'Error de pago')
   }
 
   if (!currentProduct) {
@@ -180,15 +191,19 @@ export default function PaymentPage() {
   const total = subtotal + baseFee + shippingFee + tax
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <button
         onClick={() => navigate(`/product/${productId}`)}
-        className="mb-4 text-blue-600 hover:text-blue-700 flex items-center"
+        className="mb-6 text-wompi-primary hover:text-wompi-primaryDark flex items-center space-x-2 font-medium transition-colors"
       >
-        ← Volver al producto
+        <span className="text-xl">←</span>
+        <span>Volver al producto</span>
       </button>
 
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Información de Entrega y Pago</h1>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-wompi-secondary mb-2">Información de Entrega y Pago</h1>
+        <p className="text-gray-600">Completa tus datos para procesar el pago de forma segura con Wompi</p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Formulario */}
@@ -197,7 +212,7 @@ export default function PaymentPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Datos de Entrega</h2>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-wompi-text mb-2">
                 Email *
               </label>
               <input
@@ -205,7 +220,8 @@ export default function PaymentPage() {
                 required
                 value={customerData.email}
                 onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                placeholder="tu@email.com"
               />
             </div>
 
@@ -225,22 +241,14 @@ export default function PaymentPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Teléfono *
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customerData.phoneNumberPrefix}
-                  onChange={(e) => setCustomerData({ ...customerData, phoneNumberPrefix: e.target.value })}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="+57"
-                />
-                <input
-                  type="tel"
-                  required
-                  value={customerData.phoneNumber}
-                  onChange={(e) => setCustomerData({ ...customerData, phoneNumber: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              <input
+                type="tel"
+                required
+                value={customerData.phone}
+                onChange={(e) => setCustomerData({ ...customerData, phone: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="3001234567"
+              />
             </div>
 
             <div>
@@ -250,15 +258,15 @@ export default function PaymentPage() {
               <input
                 type="text"
                 required
-                value={shippingData.addressLine1}
-                onChange={(e) => setShippingData({ ...shippingData, addressLine1: e.target.value })}
+                value={shippingData.address}
+                onChange={(e) => setShippingData({ ...shippingData, address: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-wompi-text mb-2">
                   Ciudad *
                 </label>
                 <input
@@ -266,11 +274,12 @@ export default function PaymentPage() {
                   required
                   value={shippingData.city}
                   onChange={(e) => setShippingData({ ...shippingData, city: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                  placeholder="Bogotá"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-wompi-text mb-2">
                   Código Postal *
                 </label>
                 <input
@@ -278,13 +287,14 @@ export default function PaymentPage() {
                   required
                   value={shippingData.postalCode}
                   onChange={(e) => setShippingData({ ...shippingData, postalCode: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                  placeholder="110111"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-wompi-text mb-2">
                 Departamento/Región *
               </label>
               <input
@@ -292,70 +302,146 @@ export default function PaymentPage() {
                 required
                 value={shippingData.region}
                 onChange={(e) => setShippingData({ ...shippingData, region: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-wompi-primary focus:border-wompi-primary transition-all"
+                placeholder="Cundinamarca"
               />
             </div>
 
+            <div className="pt-6 border-t-2 border-gray-100 mt-6">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-wompi-primary to-wompi-primaryDark rounded-lg flex items-center justify-center">
+                  <span className="text-white text-xl">💳</span>
+                </div>
+                <h2 className="text-2xl font-bold text-wompi-secondary">Datos de Tarjeta</h2>
+              </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Número de Tarjeta *
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={19}
+                value={cardData.number}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '')
+                  const formatted = value.match(/.{1,4}/g)?.join(' ') || value
+                  setCardData({ ...cardData, number: formatted })
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="4242 4242 4242 4242"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mes *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={2}
+                  value={cardData.expMonth}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 2)
+                    setCardData({ ...cardData, expMonth: value })
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="12"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Año *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={2}
+                  value={cardData.expYear}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 2)
+                    setCardData({ ...cardData, expYear: value })
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="29"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CVV *
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={4}
+                  value={cardData.cvc}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 4)
+                    setCardData({ ...cardData, cvc: value })
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="123"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-gradient-to-br from-wompi-primary/5 to-wompi-primaryLight/5 rounded-xl border border-wompi-primary/20">
+              <label className="block text-sm font-semibold text-wompi-text mb-3">
                 Cantidad
               </label>
               <div className="flex items-center space-x-4">
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-10 h-10 rounded-md bg-gray-200 hover:bg-gray-300 flex items-center justify-center"
+                  className="w-12 h-12 rounded-xl bg-white border-2 border-wompi-primary text-wompi-primary hover:bg-wompi-primary hover:text-white flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
                 >
-                  -
+                  −
                 </button>
-                <span className="text-lg font-medium w-12 text-center">{quantity}</span>
+                <span className="text-2xl font-bold text-wompi-secondary w-16 text-center">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.min(currentProduct.stock, quantity + 1))}
                   disabled={quantity >= currentProduct.stock}
-                  className="w-10 h-10 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="w-12 h-12 rounded-xl bg-white border-2 border-wompi-primary text-wompi-primary hover:bg-wompi-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-wompi-primary flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
                 >
                   +
                 </button>
-                <span className="text-sm text-gray-500">
-                  (Stock: {currentProduct.stock})
+                <span className="text-sm text-gray-600 ml-4">
+                  Stock disponible: <span className="font-bold text-wompi-primaryDark">{currentProduct.stock}</span>
                 </span>
               </div>
             </div>
 
-            {!checkoutSession ? (
-              <button
-                type="button"
-                onClick={handleCreateSession}
-                disabled={isTransactionLoading}
-                className="w-full bg-blue-600 text-white py-3 rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isTransactionLoading ? 'Creando sesión...' : 'Continuar con el pago'}
-              </button>
-            ) : (
-              <div className="space-y-4">
-                <WompiWidget
-                  publicKey={checkoutSession.publicKey}
-                  currency={checkoutSession.currency}
-                  amountInCents={checkoutSession.amountInCents}
-                  reference={checkoutSession.reference}
-                  signature={checkoutSession.signature}
-                  redirectUrl={checkoutSession.redirectUrl}
-                  shippingAddress={checkoutSession.shippingAddress}
-                  customerData={checkoutSession.customerData}
-                  taxInCents={checkoutSession.taxInCents}
-                  onSuccess={handleWompiSuccess}
-                  onError={handleWompiError}
-                />
-                <button
-                  type="button"
-                  onClick={() => setCheckoutSession(null)}
-                  className="w-full bg-gray-200 text-gray-700 py-2 rounded-md font-medium hover:bg-gray-300"
-                >
-                  Volver a editar
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={isTransactionLoading}
+              className="w-full bg-gradient-to-r from-wompi-primary to-wompi-primaryDark text-white py-4 px-6 rounded-xl font-bold text-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2"
+            >
+              {isTransactionLoading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Procesando pago...</span>
+                </>
+              ) : (
+                <>
+                  <span>💳</span>
+                  <span>Pagar con Wompi</span>
+                </>
+              )}
+            </button>
+            
+            <div className="flex items-center justify-center space-x-2 text-xs text-gray-500 pt-2">
+              <span>🔒</span>
+              <span>Pago seguro procesado por</span>
+              <span className="font-bold text-wompi-primary">Wompi</span>
+            </div>
           </form>
         </div>
 

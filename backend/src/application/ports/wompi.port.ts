@@ -1,6 +1,22 @@
 export interface IWompiPort {
+  getAcceptanceToken(): Promise<string>;
+  tokenizeCard(cardData: WompiCardData): Promise<WompiTokenResponse>;
   createTransaction(data: WompiTransactionData): Promise<WompiTransactionResponse>;
   getTransaction(transactionId: string): Promise<WompiTransactionResponse>;
+}
+
+export interface WompiCardData {
+  number: string;
+  expMonth: string;
+  expYear: string;
+  cvc: string;
+  cardHolder: string;
+}
+
+export interface WompiTokenResponse {
+  data: {
+    id: string;
+  };
 }
 
 export interface WompiTransactionData {
@@ -13,13 +29,8 @@ export interface WompiTransactionData {
     token: string;
   };
   reference: string;
-  shippingAddress?: {
-    addressLine1: string;
-    city: string;
-    phoneNumber: string;
-    region: string;
-    country: string;
-  };
+  // shippingAddress se omite - no es obligatorio y causa errores 422 en sandbox
+  // La dirección se guarda en el backend pero no se envía a Wompi
 }
 
 export interface WompiTransactionResponse {

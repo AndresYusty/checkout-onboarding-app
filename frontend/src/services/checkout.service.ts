@@ -76,7 +76,44 @@ export interface TransactionResponse {
   error?: string
 }
 
+export interface ProcessCheckoutDto {
+  productId: string
+  quantity?: number
+  customer: {
+    fullName: string
+    email: string
+    phone: string
+  }
+  delivery: {
+    address: string
+    city: string
+    country: string
+    postalCode: string
+    region?: string
+  }
+  card: {
+    number: string
+    expMonth: string
+    expYear: string
+    cvc: string
+  }
+}
+
+export interface ProcessCheckoutResponse {
+  success: boolean
+  status?: string
+  transactionId?: string
+  orderId?: string
+  message?: string
+  error?: string
+}
+
 export const checkoutService = {
+  processCheckout: async (data: ProcessCheckoutDto): Promise<ProcessCheckoutResponse> => {
+    const response = await api.post<ProcessCheckoutResponse>('/checkout', data)
+    return response.data
+  },
+
   createCheckoutSession: async (data: CreateCheckoutSessionDto): Promise<CheckoutSessionResponse> => {
     const response = await api.post<CheckoutSessionResponse>('/checkout/sessions', data)
     return response.data

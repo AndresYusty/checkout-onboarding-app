@@ -77,6 +77,8 @@ export class CreateTransactionUseCase {
     });
 
     // 5. Llamar a Wompi
+    // NOTA: shipping_address NO se envía a Wompi (causa 422 en sandbox)
+    // La dirección ya se guardó en el backend al crear la orden
     const wompiResponse = await this.wompiPort.createTransaction({
       amountInCents: totalInCents,
       currency: 'COP',
@@ -87,13 +89,7 @@ export class CreateTransactionUseCase {
         token: input.paymentToken,
       },
       reference: orderNumber,
-      shippingAddress: {
-        addressLine1: input.shippingAddress.street,
-        city: input.shippingAddress.city,
-        phoneNumber: input.shippingAddress.phone,
-        region: input.shippingAddress.state || input.shippingAddress.city,
-        country: input.shippingAddress.country,
-      },
+      // shippingAddress se omite - no es obligatorio y causa errores 422 en sandbox
     });
 
     // 6. Actualizar orden con paymentId y estado

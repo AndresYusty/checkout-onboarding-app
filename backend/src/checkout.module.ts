@@ -4,6 +4,7 @@ import { WompiWebhookController } from './interfaces/rest/controllers/wompi-webh
 import { TransactionRepository } from './infrastructure/repositories/transaction.repository.impl';
 import { ProductRepository } from './infrastructure/repositories/product.repository.impl';
 import { CreateTransactionUseCase } from './application/use-cases/checkout/create-transaction.use-case';
+import { ProcessCheckoutUseCase } from './application/use-cases/checkout/process-checkout.use-case';
 import { WompiAdapter } from './infrastructure/adapters/wompi.adapter';
 
 @Module({
@@ -12,6 +13,7 @@ import { WompiAdapter } from './infrastructure/adapters/wompi.adapter';
     TransactionRepository,
     ProductRepository,
     CreateTransactionUseCase,
+    ProcessCheckoutUseCase,
     WompiAdapter,
   ],
   exports: [TransactionRepository],

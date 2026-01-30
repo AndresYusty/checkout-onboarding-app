@@ -9,7 +9,9 @@ import {
 } from '@nestjs/common';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { CreateCheckoutSessionDto } from '../dto/create-checkout-session.dto';
+import { CreateCheckoutDto } from '../dto/create-checkout.dto';
 import { CreateTransactionUseCase } from '../../../application/use-cases/checkout/create-transaction.use-case';
+import { ProcessCheckoutUseCase } from '../../../application/use-cases/checkout/process-checkout.use-case';
 import { TransactionRepository } from '../../../infrastructure/repositories/transaction.repository.impl';
 import { ProductRepository } from '../../../infrastructure/repositories/product.repository.impl';
 import { generateWompiSignature } from '../../../utils/wompi-signature.util';
@@ -19,10 +21,17 @@ import { ConfigService } from '@nestjs/config';
 export class CheckoutController {
   constructor(
     private readonly createTransactionUseCase: CreateTransactionUseCase,
+    private readonly processCheckoutUseCase: ProcessCheckoutUseCase,
     private readonly transactionRepository: TransactionRepository,
     private readonly productRepository: ProductRepository,
     private readonly configService: ConfigService,
   ) {}
+
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  async processCheckout(@Body() createCheckoutDto: CreateCheckoutDto) {
+    return this.processCheckoutUseCase.execute(createCheckoutDto);
+  }
 
   @Post('sessions')
   @HttpCode(HttpStatus.CREATED)
