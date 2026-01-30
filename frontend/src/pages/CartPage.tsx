@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCart } from '../context/CartContext'
+import { useAppDispatch, useAppSelector } from '../store/hooks'
+import { removeItem, updateQuantity, clearCart, selectCartItems, selectCartTotal } from '../store/slices/cartSlice'
 import { useModal } from '../context/ModalContext'
 import ConfirmModal from '../components/ConfirmModal'
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, getTotal, clearCart } = useCart()
+  const dispatch = useAppDispatch()
+  const items = useAppSelector(selectCartItems)
+  const total = useAppSelector(selectCartTotal)
   const { showModal } = useModal()
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [itemToRemove, setItemToRemove] = useState<string | null>(null)
@@ -37,19 +40,19 @@ export default function CartPage() {
         </button>
       </div>
 
-      <ConfirmModal
-        isOpen={showClearConfirm}
-        onClose={() => setShowClearConfirm(false)}
-        onConfirm={() => {
-          clearCart()
-          showModal('Carrito limpiado exitosamente', 'info', 'Carrito vacío')
-        }}
-        title="Limpiar carrito"
-        message="¿Estás seguro de que deseas eliminar todos los productos del carrito? Esta acción no se puede deshacer."
-        confirmText="Sí, limpiar"
-        cancelText="Cancelar"
-        type="warning"
-      />
+        <ConfirmModal
+          isOpen={showClearConfirm}
+          onClose={() => setShowClearConfirm(false)}
+          onConfirm={() => {
+            dispatch(clearCart())
+            showModal('Carrito limpiado exitosamente', 'info', 'Carrito vacío')
+          }}
+          title="Limpiar carrito"
+          message="¿Estás seguro de que deseas eliminar todos los productos del carrito? Esta acción no se puede deshacer."
+          confirmText="Sí, limpiar"
+          cancelText="Cancelar"
+          type="warning"
+        />
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="space-y-4">
@@ -78,14 +81,14 @@ export default function CartPage() {
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                    onClick={() => dispatch(updateQuantity({ productId: item.product.id, quantity: item.quantity - 1 }))}
                     className="w-8 h-8 rounded-md bg-gray-200 hover:bg-gray-300 flex items-center justify-center"
                   >
                     -
                   </button>
                   <span className="w-12 text-center font-medium">{item.quantity}</span>
                   <button
-                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                    onClick={() => dispatch(updateQuantity({ productId: item.product.id, quantity: item.quantity + 1 }))}
                     disabled={item.quantity >= item.product.stock}
                     className="w-8 h-8 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   >
@@ -114,7 +117,7 @@ export default function CartPage() {
         <div className="flex justify-between items-center mb-4">
           <span className="text-xl font-semibold text-gray-900">Total:</span>
           <span className="text-3xl font-bold text-gray-900">
-            ${getTotal().toLocaleString('es-CO')}
+            ${total.toLocaleString('es-CO')}
           </span>
         </div>
         <Link
@@ -131,7 +134,7 @@ export default function CartPage() {
           onClose={() => setItemToRemove(null)}
           onConfirm={() => {
             const product = items.find(item => item.product.id === itemToRemove)?.product
-            removeItem(itemToRemove)
+            dispatch(removeItem(itemToRemove!))
             showModal(
               `${product?.name || 'Producto'} eliminado del carrito`,
               'info',

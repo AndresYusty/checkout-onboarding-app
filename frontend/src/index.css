@@ -16,3 +16,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Mejoras para móvil */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+}
+
+/* Asegurar que las imágenes no se salgan de sus contenedores */
+img {
+  max-width: 100%;
+  height: auto;
+  object-fit: cover;
+}

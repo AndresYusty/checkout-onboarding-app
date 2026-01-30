@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Product, productService } from '../services/api'
-import { useCart } from '../context/CartContext'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAppDispatch, useAppSelector } from '../store/hooks'
+import { setProducts, setLoading, setError } from '../store/slices/productSlice'
+import { productService } from '../services/api'
 import { useModal } from '../context/ModalContext'
 
 export default function CatalogPage() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const { addItem } = useCart()
+  const navigate = useNavigate()
+  const dispatch = useAppDispatch()
+  const { products, isLoading, error } = useAppSelector((state) => state.product)
   const { showModal } = useModal()
 
   useEffect(() => {
@@ -16,35 +17,22 @@ export default function CatalogPage() {
 
   const loadProducts = async () => {
     try {
-      setLoading(true)
+      dispatch(setLoading(true))
       const data = await productService.getAll()
-      setProducts(data)
+      dispatch(setProducts(data))
     } catch (err) {
-      setError('Error al cargar los productos')
-      console.error(err)
+      dispatch(setError('Error al cargar los productos'))
+      showModal('Error al cargar los productos', 'error', 'Error')
     } finally {
-      setLoading(false)
+      dispatch(setLoading(false))
     }
   }
 
-  const handleAddToCart = (product: Product) => {
-    if (product.stock > 0) {
-      addItem(product, 1)
-      showModal(
-        `${product.name} agregado al carrito`,
-        'success',
-        'Producto agregado'
-      )
-    } else {
-      showModal(
-        'Este producto no tiene stock disponible',
-        'error',
-        'Sin stock'
-      )
-    }
+  const handleProductClick = (productId: string) => {
+    navigate(`/product/${productId}`)
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-lg text-gray-600">Cargando productos...</div>
@@ -100,7 +88,7 @@ export default function CatalogPage() {
                   </span>
                 </div>
                 <button
-                  onClick={() => handleAddToCart(product)}
+                  onClick={() => handleProductClick(product.id)}
                   disabled={product.stock === 0}
                   className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
                     product.stock > 0
@@ -108,7 +96,7 @@ export default function CatalogPage() {
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  {product.stock > 0 ? 'Agregar al Carrito' : 'Sin Stock'}
+                  {product.stock > 0 ? 'Ver Producto' : 'Sin Stock'}
                 </button>
               </div>
             </div>
