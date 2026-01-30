@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { setCurrentProduct, setLoading } from '../store/slices/productSlice'
 import { setTransaction, setLoading as setTransactionLoading } from '../store/slices/transactionSlice'
+import { selectCartItems, clearCart } from '../store/slices/cartSlice'
 import { productService } from '../services/api'
 import { checkoutService } from '../services/checkout.service'
 import { useModal } from '../context/ModalContext'
@@ -22,11 +23,14 @@ import { CardLogo } from '../components/CardLogos'
 
 export default function PaymentPage() {
   const { productId } = useParams<{ productId: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const dispatch = useAppDispatch()
   const { currentProduct } = useAppSelector((state) => state.product)
   const { isLoading: isTransactionLoading } = useAppSelector((state) => state.transaction)
+  const cartItems = useAppSelector(selectCartItems)
   const { showModal } = useModal()
+  const fromCart = searchParams.get('fromCart') === 'true'
 
   const [quantity, setQuantity] = useState(1)
   const [shippingData, setShippingData] = useState({
@@ -205,8 +209,6 @@ export default function PaymentPage() {
   }
 
   const handleCheckout = async () => {
-    if (!currentProduct || !productId) return
-
     // Validar datos de entrega
     if (!validateDelivery()) {
       showModal('Por favor corrige los errores en el formulario', 'warning', 'Campos inválidos')
@@ -225,60 +227,83 @@ export default function PaymentPage() {
       return
     }
 
-    if (quantity > currentProduct.stock) {
-      showModal('La cantidad solicitada excede el stock disponible', 'error', 'Stock insuficiente')
-      return
-    }
-
     dispatch(setTransactionLoading(true))
 
     try {
-      const result = await checkoutService.processCheckout({
-        productId,
-        quantity: quantity, // Enviar la cantidad real
-        customer: {
-          fullName: customerData.fullName || 'Cliente',
-          email: customerData.email,
-          phone: customerData.phone,
-        },
-        delivery: {
-          address: shippingData.address,
-          city: shippingData.city,
-          country: shippingData.country,
-          postalCode: shippingData.postalCode,
-          region: shippingData.region,
-        },
-        card: {
-          number: cardData.number.replace(/\s/g, ''),
-          expMonth: cardData.expMonth,
-          expYear: cardData.expYear,
-          cvc: cardData.cvc,
-        },
-      })
-
-      if (result.success) {
-        dispatch(setTransaction({
-          orderId: result.orderId || '',
-          paymentId: result.transactionId || '',
-          status: result.status === 'APPROVED' ? 'approved' : result.status === 'DECLINED' ? 'rejected' : 'pending',
-          productId,
-          quantity,
-        }))
-        
-        // Limpiar localStorage del producto para forzar recarga desde API
-        localStorage.removeItem('currentProduct')
-        
-        showModal(
-          result.message || 'Pago procesado correctamente',
-          result.status === 'APPROVED' ? 'success' : 'warning',
-          result.status === 'APPROVED' ? 'Pago exitoso' : 'Pago pendiente'
-        )
-        setTimeout(() => {
-          navigate(`/product/${productId}`)
-        }, 2000)
-      } else {
-        showModal(result.error || 'Error al procesar el pago', 'error', 'Error')
+      const itemsToProcess = fromCart && cartItems.length > 0 ? cartItems : [{ product: currentProduct, quantity }]
+      
+      // Validar stock para todos los productos
+      for (const item of itemsToProcess) {
+        if (item.quantity > item.product.stock) {
+          showModal(
+            `Stock insuficiente para ${item.product.name}. Disponible: ${item.product.stock}, Solicitado: ${item.quantity}`,
+            'error',
+            'Stock insuficiente'
+          )
+          dispatch(setTransactionLoading(false))
+          return
+        }
       }
+
+      // Procesar cada producto
+      const results = []
+      for (const item of itemsToProcess) {
+        const result = await checkoutService.processCheckout({
+          productId: item.product.id,
+          quantity: item.quantity,
+          customer: {
+            fullName: customerData.fullName || 'Cliente',
+            email: customerData.email,
+            phone: customerData.phone,
+          },
+          delivery: {
+            address: shippingData.address,
+            city: shippingData.city,
+            country: shippingData.country,
+            postalCode: shippingData.postalCode,
+            region: shippingData.region,
+          },
+          card: {
+            number: cardData.number.replace(/\s/g, ''),
+            expMonth: cardData.expMonth,
+            expYear: cardData.expYear,
+            cvc: cardData.cvc,
+          },
+        })
+        results.push(result)
+        
+        // Si algún pago falla, detener el proceso
+        if (!result.success) {
+          showModal(result.error || 'Error al procesar el pago', 'error', 'Error')
+          dispatch(setTransactionLoading(false))
+          return
+        }
+      }
+
+      // Todos los pagos fueron exitosos
+      const allApproved = results.every(r => r.status === 'APPROVED')
+      
+      // Limpiar localStorage y carrito si viene del carrito
+      localStorage.removeItem('currentProduct')
+      if (fromCart) {
+        dispatch(clearCart())
+      }
+      
+      showModal(
+        fromCart 
+          ? `${results.length} producto${results.length > 1 ? 's' : ''} pagado${results.length > 1 ? 's' : ''} exitosamente`
+          : 'Pago procesado correctamente',
+        allApproved ? 'success' : 'warning',
+        allApproved ? 'Pago exitoso' : 'Pago pendiente'
+      )
+      
+      setTimeout(() => {
+        if (fromCart) {
+          navigate('/')
+        } else {
+          navigate(`/product/${productId}`)
+        }
+      }, 2000)
     } catch (error: any) {
       showModal(error.message || 'Error al procesar el pago', 'error', 'Error')
     } finally {
@@ -286,7 +311,8 @@ export default function PaymentPage() {
     }
   }
 
-  if (!currentProduct) {
+  // Si viene del carrito, no necesitamos currentProduct
+  if (!fromCart && !currentProduct) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-lg text-gray-600">Cargando...</div>
@@ -294,40 +320,70 @@ export default function PaymentPage() {
     )
   }
 
+  // Si viene del carrito pero no hay productos, redirigir
+  if (fromCart && cartItems.length === 0) {
+    navigate('/cart')
+    return null
+  }
+
   const baseFee = 3000
   const shippingFee = 7000
-  const subtotal = Number(currentProduct.price) * quantity
-  const tax = Math.round(subtotal * 0.19)
-  const total = subtotal + baseFee + shippingFee + tax
+  
+  // Calcular totales según si viene del carrito o no
+  const calculateTotals = () => {
+    if (fromCart && cartItems.length > 0) {
+      // Calcular para todos los productos del carrito
+      const cartSubtotal = cartItems.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0)
+      const cartTax = Math.round(cartSubtotal * 0.19)
+      const cartTotal = cartSubtotal + baseFee + shippingFee + cartTax
+      return {
+        subtotal: cartSubtotal,
+        tax: cartTax,
+        total: cartTotal,
+        items: cartItems,
+      }
+    } else {
+      // Calcular para un solo producto
+      const subtotal = Number(currentProduct.price) * quantity
+      const tax = Math.round(subtotal * 0.19)
+      const total = subtotal + baseFee + shippingFee + tax
+      return {
+        subtotal,
+        tax,
+        total,
+        items: [{ product: currentProduct, quantity }],
+      }
+    }
+  }
+  
+  const totals = calculateTotals()
 
   return (
     <div className="max-w-5xl mx-auto">
       <button
-        onClick={() => navigate(`/product/${productId}`)}
+        onClick={() => fromCart ? navigate('/cart') : navigate(`/product/${productId}`)}
         className="mb-6 text-gray-700 hover:text-gray-900 flex items-center space-x-2 font-medium transition-colors"
       >
         <span className="text-xl">←</span>
-        <span>Volver al producto</span>
+        <span>{fromCart ? 'Volver al carrito' : 'Volver al producto'}</span>
       </button>
 
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">Información de Entrega y Pago</h1>
-        <p className="text-gray-600">Completa tus datos para procesar el pago de forma segura con Wompi</p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Información de Entrega y Pago</h1>
+        <p className="text-sm text-gray-500">Completa tus datos para procesar el pago de forma segura</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Formulario */}
         <div className="lg:col-span-2">
-          <form className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-6">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl">👤</span>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Datos de Cliente</h2>
+          <form className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-5">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-gray-900">Datos de Cliente</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Información del comprador</p>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Email *
               </label>
               <input
@@ -347,10 +403,10 @@ export default function PaymentPage() {
                     setDeliveryErrors((prev) => ({ ...prev, email: 'Email inválido' }))
                   }
                 }}
-                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm ${
                   deliveryErrors.email
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-200 focus:border-gray-800'
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300'
                 }`}
                 placeholder="tu@email.com"
               />
@@ -360,20 +416,20 @@ export default function PaymentPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Nombre Completo
               </label>
               <input
                 type="text"
                 value={customerData.fullName}
                 onChange={(e) => setCustomerData({ ...customerData, fullName: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-gray-800 transition-all"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
                 placeholder="Juan Pérez"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Teléfono *
               </label>
               <input
@@ -394,10 +450,10 @@ export default function PaymentPage() {
                     setDeliveryErrors((prev) => ({ ...prev, phone: 'Teléfono inválido (10-13 dígitos)' }))
                   }
                 }}
-                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm ${
                   deliveryErrors.phone
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-200 focus:border-gray-800'
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300'
                 }`}
                 placeholder="3001234567"
               />
@@ -406,17 +462,15 @@ export default function PaymentPage() {
               )}
             </div>
 
-            <div className="pt-6 border-t-2 border-gray-100 mt-6">
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xl">📦</span>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900">Datos de Entrega</h2>
+            <div className="pt-5 border-t border-gray-200 mt-5">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-gray-900">Datos de Entrega</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Dirección de envío</p>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Dirección *
               </label>
               <input
@@ -434,10 +488,10 @@ export default function PaymentPage() {
                     setDeliveryErrors((prev) => ({ ...prev, address: 'La dirección es requerida' }))
                   }
                 }}
-                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm ${
                   deliveryErrors.address
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-200 focus:border-gray-800'
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300'
                 }`}
                 placeholder="Calle 123 # 45-67"
               />
@@ -448,7 +502,7 @@ export default function PaymentPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Ciudad *
                 </label>
                 <input
@@ -466,10 +520,10 @@ export default function PaymentPage() {
                       setDeliveryErrors((prev) => ({ ...prev, city: 'La ciudad es requerida' }))
                     }
                   }}
-                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm ${
                     deliveryErrors.city
-                      ? 'border-red-500 focus:border-red-500'
-                      : 'border-gray-200 focus:border-gray-800'
+                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300'
                   }`}
                   placeholder="Bogotá"
                 />
@@ -478,7 +532,7 @@ export default function PaymentPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Código Postal *
                 </label>
                 <input
@@ -496,10 +550,10 @@ export default function PaymentPage() {
                       setDeliveryErrors((prev) => ({ ...prev, postalCode: 'El código postal es requerido' }))
                     }
                   }}
-                  className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm ${
                     deliveryErrors.postalCode
-                      ? 'border-red-500 focus:border-red-500'
-                      : 'border-gray-200 focus:border-gray-800'
+                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300'
                   }`}
                   placeholder="110111"
                 />
@@ -510,7 +564,7 @@ export default function PaymentPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Departamento/Región *
               </label>
               <input
@@ -528,10 +582,10 @@ export default function PaymentPage() {
                     setDeliveryErrors((prev) => ({ ...prev, region: 'La región es requerida' }))
                   }
                 }}
-                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all ${
+                className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm ${
                   deliveryErrors.region
-                    ? 'border-red-500 focus:border-red-500'
-                    : 'border-gray-200 focus:border-gray-800'
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300'
                 }`}
                 placeholder="Cundinamarca"
               />
@@ -540,16 +594,14 @@ export default function PaymentPage() {
               )}
             </div>
 
-            <div className="pt-6 border-t-2 border-gray-100 mt-6">
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xl">💳</span>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900">Datos de Tarjeta</h2>
+            <div className="pt-5 border-t border-gray-200 mt-5">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-gray-900">Datos de Tarjeta</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Información de pago</p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Número de Tarjeta *
                 </label>
                 <div className="relative">
@@ -565,10 +617,10 @@ export default function PaymentPage() {
                       validateCardNumber(formatted)
                     }}
                     onBlur={() => validateCardNumber(cardData.number)}
-                    className={`w-full px-4 py-3 pr-16 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-lg font-mono ${
+                    className={`w-full px-3 py-2.5 pr-14 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-mono ${
                       cardErrors.number
-                        ? 'border-red-500 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-800'
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300'
                     }`}
                     placeholder="4242 4242 4242 4242"
                   />
@@ -588,7 +640,7 @@ export default function PaymentPage() {
 
               <div className="grid grid-cols-3 gap-4 mt-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Mes *
                   </label>
                   <input
@@ -602,16 +654,16 @@ export default function PaymentPage() {
                       validateExpiry(value, cardData.expYear)
                     }}
                     onBlur={() => validateExpiry(cardData.expMonth, cardData.expYear)}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-center font-mono ${
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-center font-mono text-sm ${
                       cardErrors.expiry
-                        ? 'border-red-500 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-800'
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300'
                     }`}
                     placeholder="12"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Año *
                   </label>
                   <input
@@ -625,16 +677,16 @@ export default function PaymentPage() {
                       validateExpiry(cardData.expMonth, value)
                     }}
                     onBlur={() => validateExpiry(cardData.expMonth, cardData.expYear)}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-center font-mono ${
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-center font-mono text-sm ${
                       cardErrors.expiry
-                        ? 'border-red-500 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-800'
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300'
                     }`}
                     placeholder="29"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     CVV *
                   </label>
                   <input
@@ -648,10 +700,10 @@ export default function PaymentPage() {
                       validateCvc(value)
                     }}
                     onBlur={() => validateCvc(cardData.cvc)}
-                    className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-800 transition-all text-center font-mono ${
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-center font-mono text-sm ${
                       cardErrors.cvc
-                        ? 'border-red-500 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-800'
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300'
                     }`}
                     placeholder="123"
                   />
@@ -663,38 +715,40 @@ export default function PaymentPage() {
               {cardErrors.cvc && <p className="text-sm text-red-600 mt-1">{cardErrors.cvc}</p>}
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Cantidad
-              </label>
-              <div className="flex items-center space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-12 h-12 rounded-xl bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
-                >
-                  −
-                </button>
-                <span className="text-2xl font-bold text-gray-900 w-16 text-center">{quantity}</span>
-                <button
-                  type="button"
-                  onClick={() => setQuantity(Math.min(currentProduct.stock, quantity + 1))}
-                  disabled={quantity >= currentProduct.stock}
-                  className="w-12 h-12 rounded-xl bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-800 flex items-center justify-center font-bold text-lg transition-all shadow-md hover:shadow-lg"
-                >
-                  +
-                </button>
-                <span className="text-sm text-gray-600 ml-4">
-                  Stock disponible: <span className="font-bold text-gray-800">{currentProduct.stock}</span>
-                </span>
+            {!fromCart && (
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cantidad
+                </label>
+                <div className="flex items-center space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-10 h-10 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 flex items-center justify-center font-medium transition-all"
+                  >
+                    −
+                  </button>
+                  <span className="text-lg font-semibold text-gray-900 w-12 text-center">{quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(Math.min(currentProduct.stock, quantity + 1))}
+                    disabled={quantity >= currentProduct.stock}
+                    className="w-10 h-10 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium transition-all"
+                  >
+                    +
+                  </button>
+                  <span className="text-sm text-gray-500 ml-3">
+                    Stock: <span className="font-medium text-gray-700">{currentProduct.stock}</span>
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             <button
               type="button"
               onClick={handleCheckout}
               disabled={isTransactionLoading}
-              className="w-full bg-gray-900 text-white py-4 px-6 rounded-xl font-bold text-lg hover:bg-gray-800 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2"
+              className="w-full bg-gray-900 text-white py-3 px-5 rounded-lg font-medium text-base hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center space-x-2"
             >
               {isTransactionLoading ? (
                 <>
@@ -722,22 +776,21 @@ export default function PaymentPage() {
 
         {/* Resumen */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sticky top-4">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl">📋</span>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Resumen</h2>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 sticky top-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Resumen</h2>
             </div>
 
             <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">{currentProduct.name}</span>
-                <span className="text-gray-900">x{quantity}</span>
-              </div>
-              <div className="flex justify-between text-sm">
+              {totals.items.map((item) => (
+                <div key={item.product.id} className="flex justify-between text-sm pb-2 border-b border-gray-100 last:border-b-0">
+                  <span className="text-gray-600">{item.product.name}</span>
+                  <span className="text-gray-900">x{item.quantity}</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm pt-2">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="text-gray-900">${subtotal.toLocaleString('es-CO')}</span>
+                <span className="text-gray-900">${totals.subtotal.toLocaleString('es-CO')}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Tarifa base</span>
@@ -749,14 +802,14 @@ export default function PaymentPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">IVA (19%)</span>
-                <span className="text-gray-900">${tax.toLocaleString('es-CO')}</span>
+                <span className="text-gray-900">${totals.tax.toLocaleString('es-CO')}</span>
               </div>
             </div>
 
             <div className="border-t pt-4">
               <div className="flex justify-between text-lg font-bold">
                 <span className="text-gray-900">Total</span>
-                <span className="text-gray-900">${total.toLocaleString('es-CO')}</span>
+                <span className="text-gray-900">${totals.total.toLocaleString('es-CO')}</span>
               </div>
             </div>
           </div>
