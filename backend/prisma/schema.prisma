@@ -10,13 +10,197 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Add your models here
-// Example:
-// model User {
-//   id        Int      @id @default(autoincrement())
-//   email     String   @unique
-//   name      String?
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-// }
+// ============================================
+// CATALOG DOMAIN - Productos y Catálogo
+// ============================================
 
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal   @db.Decimal(10, 2)
+  sku         String?   @unique
+  stock       Int       @default(0)
+  imageUrl    String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relaciones
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@index([categoryId])
+  @@index([sku])
+  @@map("products")
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  slug        String    @unique
+  parentId    String?
+  parent      Category? @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryToCategory")
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relaciones
+  products    Product[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+// ============================================
+// CHECKOUT DOMAIN - Carrito, Órdenes y Pagos
+// ============================================
+
+model Cart {
+  id        String    @id @default(uuid())
+  userId    String?   @unique
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?   @unique // Para carritos de usuarios no autenticados
+  items     CartItem[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([sessionId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  price     Decimal  @db.Decimal(10, 2) // Precio al momento de agregar al carrito
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique // Número de orden legible (ej: ORD-2024-001)
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status          OrderStatus @default(PENDING)
+  
+  // Información de envío
+  shippingAddress Address?    @relation(fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  shippingAddressId String?
+  
+  // Totales
+  subtotal        Decimal     @db.Decimal(10, 2)
+  shippingFee     Decimal     @db.Decimal(10, 2) @default(0)
+  tax             Decimal     @db.Decimal(10, 2) @default(0)
+  total           Decimal     @db.Decimal(10, 2)
+  
+  // Información de pago
+  paymentId      String?      @unique // ID de la transacción en Wompi
+  paymentStatus  PaymentStatus @default(PENDING)
+  paymentMethod  String?
+  
+  // Metadatos
+  notes          String?
+  items          OrderItem[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([paymentId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity    Int
+  price       Decimal  @db.Decimal(10, 2) // Precio al momento de la compra
+  subtotal    Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  APPROVED
+  REJECTED
+  CANCELLED
+  REFUNDED
+}
+
+// ============================================
+// USER DOMAIN - Usuarios y Direcciones
+// ============================================
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  firstName String?
+  lastName  String?
+  phone     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relaciones
+  addresses Address[]
+  orders    Order[]
+  cart      Cart?
+
+  @@index([email])
+  @@map("users")
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street       String
+  city         String
+  state        String?
+  postalCode   String
+  country      String   @default("Colombia")
+  isDefault    Boolean  @default(false)
+  addressType  String?  // HOME, WORK, etc.
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  orders       Order[]
+
+  @@index([userId])
+  @@map("addresses")
+}
