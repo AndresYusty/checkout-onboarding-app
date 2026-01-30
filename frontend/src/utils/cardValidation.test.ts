@@ -1,23 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { detectCardBrand, validateCardNumber, validateCVV, validateExpiryDate } from './cardValidation'
+import { detectBrand, validateCardNumber, validateCVV, validateExpiryDate, CardBrand } from './cardValidation'
 
 describe('cardValidation', () => {
-  describe('detectCardBrand', () => {
+  describe('detectBrand', () => {
     it('should detect VISA card', () => {
-      const result = detectCardBrand('4111111111111111')
-      expect(result.type).toBe('visa')
-      expect(result.name).toBe('VISA')
+      const result = detectBrand('4111111111111111')
+      expect(result).toBe('VISA')
     })
 
     it('should detect Mastercard', () => {
-      const result = detectCardBrand('5555555555554444')
-      expect(result.type).toBe('mastercard')
-      expect(result.name).toBe('Mastercard')
+      const result = detectBrand('5555555555554444')
+      expect(result).toBe('MASTERCARD')
     })
 
-    it('should return unknown for invalid card', () => {
-      const result = detectCardBrand('1234567890123456')
-      expect(result.type).toBe('unknown')
+    it('should return UNKNOWN for invalid card', () => {
+      const result = detectBrand('1234567890123456')
+      expect(result).toBe('UNKNOWN')
     })
   })
 
@@ -38,15 +36,15 @@ describe('cardValidation', () => {
 
   describe('validateCVV', () => {
     it('should validate 3-digit CVV for VISA', () => {
-      const brand = detectCardBrand('4111111111111111')
+      const brand: CardBrand = 'VISA'
       expect(validateCVV('123', brand)).toBe(true)
       expect(validateCVV('12', brand)).toBe(false)
     })
 
-    it('should validate 4-digit CVV for AMEX', () => {
-      const brand = detectCardBrand('378282246310005')
-      expect(validateCVV('1234', brand)).toBe(true)
-      expect(validateCVV('123', brand)).toBe(false)
+    it('should validate 3-digit CVV for Mastercard', () => {
+      const brand: CardBrand = 'MASTERCARD'
+      expect(validateCVV('123', brand)).toBe(true)
+      expect(validateCVV('12', brand)).toBe(false)
     })
   })
 

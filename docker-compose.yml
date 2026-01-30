@@ -1,0 +1,66 @@
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15
+    container_name: checkout-postgres
+    environment:
+      POSTGRES_DB: checkout_db
+      POSTGRES_USER: checkout
+      POSTGRES_PASSWORD: checkout123
+    ports:
+      - "5432:5432"
+    volumes:
+      # Volumen persistente para conservar los datos
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - checkout-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U checkout"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Backend NestJS
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: checkout-backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - checkout-net
+    restart: unless-stopped
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://backend:3000}
+    container_name: checkout-frontend
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - checkout-net
+    restart: unless-stopped
+
+networks:
+  checkout-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+

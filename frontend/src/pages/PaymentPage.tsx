@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { setCurrentProduct, setLoading } from '../store/slices/productSlice'
-import { setTransaction, setLoading as setTransactionLoading } from '../store/slices/transactionSlice'
+import { setLoading as setTransactionLoading } from '../store/slices/transactionSlice'
 import { selectCartItems, clearCart } from '../store/slices/cartSlice'
 import { productService } from '../services/api'
 import { checkoutService } from '../services/checkout.service'
@@ -17,7 +17,6 @@ import {
   formatCardNumber,
   cleanCardNumber,
   isCardValid,
-  type CardBrand,
 } from '../utils/cardValidation'
 import { CardLogo } from '../components/CardLogos'
 
@@ -230,11 +229,17 @@ export default function PaymentPage() {
     dispatch(setTransactionLoading(true))
 
     try {
-      const itemsToProcess = fromCart && cartItems.length > 0 ? cartItems : [{ product: currentProduct, quantity }]
+      const itemsToProcess = fromCart && cartItems.length > 0 ? cartItems : currentProduct ? [{ product: currentProduct, quantity }] : []
+      
+      if (itemsToProcess.length === 0) {
+        showModal('No hay productos para procesar', 'error', 'Error')
+        dispatch(setTransactionLoading(false))
+        return
+      }
       
       // Validar stock para todos los productos
       for (const item of itemsToProcess) {
-        if (item.quantity > item.product.stock) {
+        if (item.product && item.quantity > item.product.stock) {
           showModal(
             `Stock insuficiente para ${item.product.name}. Disponible: ${item.product.stock}, Solicitado: ${item.quantity}`,
             'error',
@@ -248,6 +253,7 @@ export default function PaymentPage() {
       // Procesar cada producto
       const results = []
       for (const item of itemsToProcess) {
+        if (!item.product) continue
         const result = await checkoutService.processCheckout({
           productId: item.product.id,
           quantity: item.quantity,
@@ -344,6 +350,9 @@ export default function PaymentPage() {
       }
     } else {
       // Calcular para un solo producto
+      if (!currentProduct) {
+        return { subtotal: 0, tax: 0, total: 0, items: [] }
+      }
       const subtotal = Number(currentProduct.price) * quantity
       const tax = Math.round(subtotal * 0.19)
       const total = subtotal + baseFee + shippingFee + tax
@@ -731,14 +740,14 @@ export default function PaymentPage() {
                   <span className="text-lg font-semibold text-gray-900 w-12 text-center">{quantity}</span>
                   <button
                     type="button"
-                    onClick={() => setQuantity(Math.min(currentProduct.stock, quantity + 1))}
-                    disabled={quantity >= currentProduct.stock}
+                    onClick={() => currentProduct && setQuantity(Math.min(currentProduct.stock, quantity + 1))}
+                    disabled={!currentProduct || quantity >= currentProduct.stock}
                     className="w-10 h-10 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium transition-all"
                   >
                     +
                   </button>
                   <span className="text-sm text-gray-500 ml-3">
-                    Stock: <span className="font-medium text-gray-700">{currentProduct.stock}</span>
+                    Stock: <span className="font-medium text-gray-700">{currentProduct?.stock || 0}</span>
                   </span>
                 </div>
               </div>
@@ -783,10 +792,12 @@ export default function PaymentPage() {
 
             <div className="space-y-2 mb-4">
               {totals.items.map((item) => (
-                <div key={item.product.id} className="flex justify-between text-sm pb-2 border-b border-gray-100 last:border-b-0">
-                  <span className="text-gray-600">{item.product.name}</span>
-                  <span className="text-gray-900">x{item.quantity}</span>
-                </div>
+                item.product && (
+                  <div key={item.product.id} className="flex justify-between text-sm pb-2 border-b border-gray-100 last:border-b-0">
+                    <span className="text-gray-600">{item.product.name}</span>
+                    <span className="text-gray-900">x{item.quantity}</span>
+                  </div>
+                )
               ))}
               <div className="flex justify-between text-sm pt-2">
                 <span className="text-gray-600">Subtotal</span>

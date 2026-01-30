@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAppDispatch, useAppSelector } from '../store/hooks'
+import { useAppDispatch } from '../store/hooks'
 import { checkoutService } from '../services/checkout.service'
-import { setCurrentProduct, updateProductStock } from '../store/slices/productSlice'
+import { updateProductStock } from '../store/slices/productSlice'
 import { clearTransaction } from '../store/slices/transactionSlice'
-import { productService } from '../services/api'
 import { useModal } from '../context/ModalContext'
 
 export default function TransactionResultPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const navigate = useNavigate()
   const dispatch = useAppDispatch()
-  const { currentTransaction } = useAppSelector((state) => state.transaction)
   const { showModal } = useModal()
 
   const [order, setOrder] = useState<any>(null)
@@ -31,15 +29,18 @@ export default function TransactionResultPage() {
       const result = await checkoutService.getTransaction(orderId)
       
       if (result.success && result.data) {
-        setOrder(result.data)
+        const orderData = result.data.order || result.data
+        setOrder(orderData)
         
         // Actualizar stock en el store
-        if (result.data.items && result.data.items.length > 0) {
-          const item = result.data.items[0]
-          dispatch(updateProductStock({
-            productId: item.productId,
-            newStock: item.product.stock,
-          }))
+        if (orderData.items && orderData.items.length > 0) {
+          const item = orderData.items[0]
+          if (item.product) {
+            dispatch(updateProductStock({
+              productId: item.productId || item.product.id,
+              newStock: item.product.stock,
+            }))
+          }
         }
       } else {
         showModal('Error al cargar la transacción', 'error', 'Error')
@@ -52,9 +53,10 @@ export default function TransactionResultPage() {
   }
 
   const handleBackToProduct = () => {
-    if (order?.items?.[0]?.productId) {
+    if (order?.items?.[0]?.productId || order?.items?.[0]?.product?.id) {
       dispatch(clearTransaction())
-      navigate(`/product/${order.items[0].productId}`)
+      const productId = order.items[0].productId || order.items[0].product?.id
+      navigate(`/product/${productId}`)
     } else {
       navigate('/')
     }
@@ -140,7 +142,7 @@ export default function TransactionResultPage() {
                 {order.paymentStatus}
               </span>
             </div>
-            {order.items && order.items.length > 0 && (
+            {order.items && order.items.length > 0 && order.items[0].product && (
               <>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Producto:</span>

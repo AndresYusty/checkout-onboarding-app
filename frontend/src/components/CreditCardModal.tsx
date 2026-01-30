@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { detectCardBrand, validateCardNumber, validateCVV, validateExpiryDate, formatCardNumber, CardBrand } from '../utils/cardValidation'
+import { detectBrand, validateCardNumber, validateCVV, validateExpiryDate, formatCardNumber, CardBrand } from '../utils/cardValidation'
 import { createWompiToken } from '../utils/wompiToken'
 
 interface CreditCardModalProps {
@@ -16,6 +16,23 @@ interface CreditCardModalProps {
   total: number
 }
 
+interface CardBrandInfo {
+  type: string
+  name: string
+  logo: string
+}
+
+const getBrandInfo = (brand: CardBrand): CardBrandInfo => {
+  switch (brand) {
+    case 'VISA':
+      return { type: 'visa', name: 'Visa', logo: '💳' }
+    case 'MASTERCARD':
+      return { type: 'mastercard', name: 'Mastercard', logo: '💳' }
+    default:
+      return { type: 'unknown', name: 'Tarjeta', logo: '💳' }
+  }
+}
+
 export default function CreditCardModal({ isOpen, onClose, onConfirm, total }: CreditCardModalProps) {
   const [cardNumber, setCardNumber] = useState('')
   const [cvv, setCvv] = useState('')
@@ -23,12 +40,15 @@ export default function CreditCardModal({ isOpen, onClose, onConfirm, total }: C
   const [expYear, setExpYear] = useState('')
   const [cardHolder, setCardHolder] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [cardBrand, setCardBrand] = useState<CardBrand>({ type: 'unknown', name: 'Tarjeta', logo: '💳' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [cardBrand, setCardBrand] = useState<CardBrandInfo>({ type: 'unknown', name: 'Tarjeta', logo: '💳' })
 
   useEffect(() => {
     if (cardNumber) {
-      const brand = detectCardBrand(cardNumber)
-      setCardBrand(brand)
+      const brand = detectBrand(cardNumber)
+      setCardBrand(getBrandInfo(brand))
+    } else {
+      setCardBrand({ type: 'unknown', name: 'Tarjeta', logo: '💳' })
     }
   }, [cardNumber])
 
@@ -50,8 +70,9 @@ export default function CreditCardModal({ isOpen, onClose, onConfirm, total }: C
       newErrors.cardNumber = 'Número de tarjeta inválido'
     }
 
-    if (!validateCVV(cvv, cardBrand)) {
-      newErrors.cvv = cardBrand.type === 'amex' ? 'CVV debe tener 4 dígitos' : 'CVV debe tener 3 dígitos'
+    const brand = detectBrand(cardNumber)
+    if (!validateCVV(cvv, brand)) {
+      newErrors.cvv = 'CVV debe tener 3 dígitos'
     }
 
     if (!validateExpiryDate(expMonth, expYear)) {
@@ -235,14 +256,14 @@ export default function CreditCardModal({ isOpen, onClose, onConfirm, total }: C
                 type="text"
                 value={cvv}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, cardBrand.type === 'amex' ? 4 : 3)
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 3)
                   setCvv(value)
                   if (errors.cvv) {
                     setErrors({ ...errors, cvv: '' })
                   }
                 }}
-                placeholder={cardBrand.type === 'amex' ? '1234' : '123'}
-                maxLength={cardBrand.type === 'amex' ? 4 : 3}
+                placeholder="123"
+                maxLength={3}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
                   errors.cvv ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
                 }`}

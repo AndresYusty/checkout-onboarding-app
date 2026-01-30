@@ -73,6 +73,33 @@ export function formatCardNumber(value: string): string {
   return groups ? groups.join(' ') : cleaned;
 }
 
+// Alias para compatibilidad
+export const detectCardBrand = detectBrand;
+
+// Funciones de validación individuales
+export function validateCardNumber(cardNumber: string): boolean {
+  const cleaned = cleanCardNumber(cardNumber);
+  if (cleaned.length < 13 || cleaned.length > 19) return false;
+  if (!isValidLuhn(cleaned)) return false;
+  const brand = detectBrand(cardNumber);
+  return brand !== 'UNKNOWN';
+}
+
+export function validateCVV(cvv: string, brand?: CardBrand): boolean {
+  const cleaned = cvv.trim();
+  // Para VISA y MASTERCARD: 3 dígitos
+  // Para AMEX: 4 dígitos (aunque no lo soportamos, mantenemos la lógica)
+  if (brand === 'UNKNOWN' || !brand) {
+    return /^\d{3,4}$/.test(cleaned);
+  }
+  // Solo soportamos VISA y MASTERCARD (3 dígitos)
+  return /^\d{3}$/.test(cleaned);
+}
+
+export function validateExpiryDate(mm: string, yy: string): boolean {
+  return isValidExpiry(mm, yy);
+}
+
 // Validación completa de tarjeta
 export function isCardValid(
   cardNumber: string,
