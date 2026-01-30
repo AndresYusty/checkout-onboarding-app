@@ -17,8 +17,12 @@ async function bootstrap() {
   );
 
   // Habilitar CORS
+  const allowedOrigins = process.env.FRONTEND_URL 
+    ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+    : ['http://localhost:5173', 'http://3.145.92.222:5173'];
+  
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     credentials: true,
   });
 

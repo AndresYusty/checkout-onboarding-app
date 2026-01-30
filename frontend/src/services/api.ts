@@ -1,7 +1,14 @@
 import axios from 'axios'
 
+// Obtener la URL del API desde las variables de entorno
+const apiUrl = import.meta.env.VITE_API_URL || 'http://3.145.92.222:3000'
+
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('VITE_API_URL no está definida, usando valor por defecto:', apiUrl)
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },

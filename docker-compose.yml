@@ -22,6 +22,8 @@ services:
     container_name: checkout-backend
     env_file:
       - ./backend/.env
+    environment:
+      - FRONTEND_URL=${FRONTEND_URL:-http://3.145.92.222:5173}
     ports:
       - "3000:3000"
     depends_on:
@@ -33,7 +35,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://3.145.92.222:3000
+        VITE_API_URL: ${VITE_API_URL:-http://3.145.92.222:3000}
     container_name: checkout-frontend
     ports:
       - "5173:80"
